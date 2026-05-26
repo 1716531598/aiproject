@@ -1,0 +1,172 @@
+//@import '~antd/lib/style/themes/default.less';
+
+.pageHeader {
+  background: var(--main-bg-color);
+  padding: 6px 32px 0 32px;
+  min-height: 46px;
+  border-bottom: var(--ant-line-width) var(--ant-line-type)
+    var(--main-border-color);
+  color: var(--main-font-color);
+  :global {
+    .ant-tabs-nav {
+      margin-bottom: 0px !important;
+    }
+    .ant-tabs-nav::before {
+      border-bottom: 0px !important;
+    }
+  }
+  .wide {
+    max-width: 1200px;
+    margin: auto;
+  }
+  .detail {
+    display: flex;
+  }
+
+  .row {
+    display: flex;
+    width: 100%;
+  }
+
+  .breadcrumb {
+    margin-bottom: 16px;
+  }
+
+  .tabs {
+    margin: 0 0 0 -8px;
+
+    :global {
+      // 1px 可以让选中效果显示完成
+      .ant-tabs-bar {
+        border-bottom: none;
+        margin-bottom: 1px;
+      }
+    }
+  }
+
+  .logo {
+    flex: 0 1 auto;
+    margin-right: 16px;
+    padding-top: 1px;
+    > img {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--ant-border-radius);
+      display: block;
+    }
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--ant-color-text-heading);
+  }
+
+  .action {
+    margin-left: 56px;
+    min-width: 266px;
+
+    :global {
+      .ant-btn-group:not(:last-child),
+      .ant-btn:not(:last-child) {
+        margin-right: 8px;
+      }
+
+      .ant-btn-group > .ant-btn {
+        margin-right: 0;
+      }
+    }
+  }
+
+  .title,
+  .content {
+    flex: auto;
+  }
+
+  .action,
+  .extraContent,
+  .main {
+    flex: 0 1 auto;
+  }
+
+  .main {
+    width: 100%;
+  }
+
+  .title,
+  .action {
+    margin-bottom: 16px;
+  }
+
+  .logo,
+  .content,
+  .extraContent {
+    margin-bottom: 16px;
+  }
+
+  .action,
+  .extraContent {
+    text-align: right;
+  }
+
+  .extraContent {
+    margin-left: 88px;
+    min-width: 242px;
+  }
+}
+
+@media screen and (max-width: var(--ant-screen-xl)) {
+  .pageHeader {
+    .extraContent {
+      margin-left: 44px;
+    }
+  }
+}
+
+@media screen and (max-width: var(--ant-screen-lg)) {
+  .pageHeader {
+    .extraContent {
+      margin-left: 20px;
+    }
+  }
+}
+
+@media screen and (max-width: var(--ant-screen-md)) {
+  .pageHeader {
+    .row {
+      display: block;
+    }
+
+    .action,
+    .extraContent {
+      margin-left: 0;
+      text-align: left;
+    }
+  }
+}
+
+@media screen and (max-width: var(--ant-screen-sm)) {
+  .pageHeader {
+    .detail {
+      display: block;
+    }
+  }
+}
+
+@media screen and (max-width: var(--ant-screen-xs)) {
+  .pageHeader {
+    .action {
+      :global {
+        .ant-btn-group,
+        .ant-btn {
+          display: block;
+          margin-bottom: 8px;
+        }
+        .ant-btn-group > .ant-btn {
+          display: inline-block;
+          margin-bottom: 0;
+        }
+      }
+    }
+  }
+}

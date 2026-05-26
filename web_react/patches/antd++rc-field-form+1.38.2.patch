@@ -1,0 +1,55 @@
+diff --git a/node_modules/antd/node_modules/rc-field-form/lib/interface.d.ts b/node_modules/antd/node_modules/rc-field-form/lib/interface.d.ts
+index 5f26e52..39f811d 100644
+--- a/node_modules/antd/node_modules/rc-field-form/lib/interface.d.ts
++++ b/node_modules/antd/node_modules/rc-field-form/lib/interface.d.ts
+@@ -29,7 +29,44 @@ export interface ValidatorRule {
+     warningOnly?: boolean;
+     message?: string | ReactElement;
+     validator: Validator;
++    /** date : yyyymmdd 默认true  (validDateYMD) */
++    date?: boolean;
++    /** dateSlash: yyyy/MM/dd 默认true  (validDateYMD) */
++    dateSlash?: boolean;
++    /** dateBarre: yyyyMMdd 默认true  (validDateYMD) */
++    dateBarre?: boolean;
++
++    /** number : 是否能输入数字 默认true  (validChart) */
++    number?: boolean;
++    /** Chinese : 是否能输入中文 默认true  (validChart) */
++    Chinese?: boolean;
++    /** English : 是否能输入英文 默认true  (validChart) */
++    English?: boolean;
++    /** chart : 能输入的特殊字符 默认_   注意:特殊字符转义例如.=>\.  'any'表示可以输入任何特殊字符  (validChart) */
++    chart?: string | boolean;
++    /** onlylen : 是否能输入数字 默认true  (validChart) */
++    onlylen?: number;
++    /** NotWhitespace : 是否禁止所以输入空格（空白字符） (validChart, validBytes) */
++    NotWhitespace?: boolean;
++
++    /**  ipv6: 是否能输入IPV4 默认true   (validAddress, Ipv4Ipv6AndMaskArray, validIpPortDomain, validAddressIpv4Array) */
++    ipv4?: boolean;
++    /**  ipv6: 是否能输入IPV6 默认true   (validAddress, Ipv4Ipv6AndMaskArray, validIpPortDomain) */
++    ipv6?: boolean;
++    /**  mask: 是否能输入IP网段 默认true   (validAddress, Ipv4Ipv6AndMaskArray, validIpPortDomain, validAddressIpv4Array) */
++    mask?: boolean;
++    /**  domain: 是否能输入域名 默认false   (validAddress, Ipv4Ipv6AndMaskArray, validIpPortDomain) */
++    domain?: boolean;
++    /**  hostname: 不能输入 带/ 端口 的域名（默认false） (validAddress, Ipv4Ipv6AndMaskArray) */
++    hostname?: boolean;
++    /**  comp: 密码校验  0:低 1:中 2:高 (validPassword, validPasswordPK) */
++    comp?: 0 | 1 | 2;
++    /**  ignoreWhitespace：默认fase 忽略空白字符 (validBytes  通用字节长度校验) */
++    ignoreWhitespace?: boolean;
++    /**  range: 是否能输入如192.168.1.1 - 192.168.1.123的ip 默认true  (validAddressIpv4Array: IPv4地址段数组格式校验) */
++    range?: boolean;
+ }
++
+ interface BaseRule {
+     warningOnly?: boolean;
+     enum?: StoreValue[];
+@@ -257,4 +294,4 @@ export interface ValidateMessages {
+         mismatch?: ValidateMessage;
+     };
+ }
+-export {};
++export { };

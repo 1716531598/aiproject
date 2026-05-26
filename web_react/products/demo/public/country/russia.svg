@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="18px" height="18px" viewBox="0 0 18 18" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 57 (83077) - https://sketch.com -->
+    <title>俄罗斯_slice</title>
+    <desc>Created with Sketch.</desc>
+    <g id="空探5.0" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="画板" transform="translate(-1123.000000, -577.000000)">
+            <g id="俄罗斯" transform="translate(1123.000000, 577.000000)">
+                <g transform="translate(1.000000, 4.000000)" fill-rule="nonzero">
+                    <rect id="矩形" fill="#000000" opacity="0" x="0" y="0" width="10.6666667" height="11"></rect>
+                    <path d="M0.104708333,10.9325176 L15.9280208,10.9325176 L15.9280208,0.0809746094 L0.104708333,0.0809746094 L0.104708333,10.9325176 Z M15.9989792,11.0221396 L15.9989792,10.9190146 L15.9989792,11.0221396 Z M0.0392604167,11 L0.0392604167,0 L15.9934687,0 L15.9934687,10.9865078 L0.0392604167,10.9865078 L0.0392604167,11 Z" id="形状" fill="#353636"></path>
+                    <polygon id="路径" fill="#E51F1F" points="0.0654375 7.31533301 15.9541875 7.31533301 15.9541875 10.9595127 0.0654375 10.9595127"></polygon>
+                    <polygon id="路径" fill="#232B8C" points="0.0654375 3.68466699 15.9541875 3.68466699 15.9541875 7.32883594 0.0654375 7.32883594"></polygon>
+                    <polygon id="路径" fill="#FFFFFF" points="0.0654375 0.0404980469 15.9541875 0.0404980469 15.9541875 3.68466699 0.0654375 3.68466699"></polygon>
+                </g>
+                <rect id="矩形" x="0" y="0" width="18" height="18"></rect>
+            </g>
+        </g>
+    </g>
+</svg>

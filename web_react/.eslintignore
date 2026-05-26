@@ -1,0 +1,10 @@
+/lambda/
+/scripts
+/config
+*.less
+
+.umi
+
+.umi-production
+
+iconfont.js

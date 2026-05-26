@@ -1,0 +1,68 @@
+//@import '~antd/es/style/themes/default.less';
+
+.numberInfo {
+  .suffix {
+    margin-left: 4px;
+    color: var(--ant-color-text);
+    font-size: 16px;
+    font-style: normal;
+  }
+  .numberInfoTitle {
+    margin-bottom: 16px;
+    color: var(--ant-color-text);
+    font-size: var(--ant-font-size-lg);
+    transition: all 0.3s;
+  }
+  .numberInfoSubTitle {
+    height: 22px;
+    overflow: hidden;
+    color: var(--sec-font-color);
+    font-size: var(--ant-font-size);
+    line-height: 22px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    word-break: break-all;
+  }
+  .numberInfoValue {
+    margin-top: 4px;
+    overflow: hidden;
+    font-size: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    word-break: break-all;
+    & > span {
+      display: inline-block;
+      height: 32px;
+      margin-right: 32px;
+      color: var(--main-font-color);
+      font-size: 24px;
+      line-height: 32px;
+    }
+    .subTotal {
+      margin-right: 0;
+      color: var(--sec-font-color);
+      font-size: var(--ant-font-size);
+      vertical-align: top;
+      .anticon {
+        margin-left: 4px;
+        font-size: 12px;
+        transform: scale(0.82);
+      }
+      :global {
+        .anticon-caret-up {
+          color: var(--ant-color-error);
+        }
+        .anticon-caret-down {
+          color: var(--ant-color-success);
+        }
+      }
+    }
+  }
+}
+.numberInfolight {
+  .numberInfoValue {
+    & > span {
+      color: var(--ant-color-text);
+    }
+  }
+}

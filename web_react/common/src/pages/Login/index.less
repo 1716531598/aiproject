@@ -1,0 +1,98 @@
+.container {
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  // background: url('../../assets/img/background.png') 50% no-repeat;
+  // background-size: cover;
+}
+.video {
+  // position: absolute;
+  // top: 50%;
+  // left: 50%;
+  // height: 100%;
+  // width: 100%;
+  // transform: translateX(-50%) translateY(-50%);
+  // z-index: -1;
+  // object-fit: cover;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  z-index: -1;
+  object-position: 50% calc(100% - 2%);
+}
+
+.lang {
+  width: 42px;
+  height: 42px;
+  line-height: 42px;
+  position: fixed;
+  right: 16px;
+}
+
+.banner {
+  position: absolute;
+  right: 13.2292vw;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  box-shadow: rgba(71, 86, 130, 0.2) 0px 0px 0.38rem;
+  padding: 24px 8px;
+  background: rgb(255, 255, 255);
+  border-radius: 16px;
+  :global {
+    .ant-pro-form-login-top {
+      width: 410px;
+    }
+    .ant-pro-form-login-title {
+      font-size: 26px;
+      color: rgb(67, 102, 176);
+      // color: #333;
+    }
+    .ant-input-affix-wrapper {
+      border: none;
+      border-bottom: 1px solid #eeeeee;
+      padding: 12px 12px 0px;
+    }
+    .ant-input-prefix {
+      color: #807e7eff;
+    }
+    .ant-pro-form-login-container {
+      padding-inline: 32px;
+      padding-block: 24px;
+    }
+    .ant-btn-lg {
+      margin-top: 18px;
+      height: 48px;
+    }
+    .ant-input-affix-wrapper > .ant-input:not(textarea) {
+      padding: 8px;
+    }
+    .ant-input-affix-wrapper-focused,
+    .ant-input-affix-wrapper-status-error:not(
+        .ant-input-affix-wrapper-disabled
+      ):not(.ant-input-affix-wrapper-borderless).ant-input-affix-wrapper:focus,
+    .ant-input-affix-wrapper-status-error:not(
+        .ant-input-affix-wrapper-disabled
+      ):not(
+        .ant-input-affix-wrapper-borderless
+      ).ant-input-affix-wrapper-focused {
+      box-shadow: none;
+    }
+  }
+}
+.verificateCode {
+  text-align: right;
+  position: absolute;
+  top: 12px;
+  right: 3px;
+  z-index: 1;
+
+  img {
+    width: 130px;
+    cursor: pointer;
+    height: 40px;
+  }
+}

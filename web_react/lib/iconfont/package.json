@@ -1,0 +1,14 @@
+{
+  "name": "@ray/iconfont",
+  "version": "1.0.0",
+  "main": "src/index.tsx",
+  "types": "src/index.d.ts",
+  "files": [
+    "src",
+    "assets"
+  ],
+  "dependencies": {
+    "@ant-design/icons": "^5.6.1",
+    "raw-loader": "^4.0.2"
+  }
+}

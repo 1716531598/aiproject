@@ -1,0 +1,20 @@
+{
+  "extends": "./src/.umi/tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": [],
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@@/*": ["./src/.umi/*"],
+      "@ray/common/*": ["../../common/src/*"]
+    }
+  },
+  "include": [
+    "./src",
+    "typings",
+    "../../common/src/components/Lease",
+    "../../common/src/pages/**/*"
+  ]
+}

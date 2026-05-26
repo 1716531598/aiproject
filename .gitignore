@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Umi generated files
+.umi/
+.umi-production/
+.umi-test/
+src/.umi/
+src/.umi-production/
+src/.umi-test/
+.mfsu/
+.mfsu-dev/
+.mfsu-prod/
+
+# SWC cache
+.swc/
+
+# Local env files
+.env.local
+.env.*.local
+.umirc.local.ts
+config/config.local.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp

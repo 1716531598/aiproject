@@ -1,0 +1,26 @@
+{
+  "name": "demo",
+  "private": true,
+  "author": "",
+  "scripts": {
+    "build": "max build",
+    "dev": "max dev",
+    "format": "prettier --cache --write .",
+    "postinstall": "max setup",
+    "setup": "max setup",
+    "start": "npm run dev"
+  },
+  "dependencies": {
+    "echarts": "^5.3.2",
+    "echarts-for-react": "^3.0.2",
+    "mockjs": "^1.1.0",
+    "rc-menu": "^9.8.2",
+    "rc-util": "^5.27.2",
+    "react-custom-scrollbars": "^4.2.1",
+    "react-dev-inspector": "^1.9.0",
+    "react-helmet-async": "^1.3.0",
+    "react-countup": "^6.5.3",
+    "umi-presets-pro": "^2.0.3"
+
+  }
+}

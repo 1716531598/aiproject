@@ -1,0 +1,128 @@
+diff --git a/es/layouts/QueryFilter/index.d.ts b/es/layouts/QueryFilter/index.d.ts
+index 1efacb9acae79dc7420a8991be12aae2564ec0f1..dec4172b1dfc00fb663d689604022cb77ffff604 100644
+--- a/es/layouts/QueryFilter/index.d.ts
++++ b/es/layouts/QueryFilter/index.d.ts
+@@ -20,6 +20,7 @@ export declare type BaseQueryFilterProps = Omit<ActionsProps, 'submitter' | 'set
+      */
+     layout?: FormProps['layout'];
+     defaultColsNumber?: number;
++    defaultRowsNumber?: number;
+     /**
+      * @name 文字标签的宽度
+      *
+diff --git a/es/layouts/QueryFilter/index.js b/es/layouts/QueryFilter/index.js
+index 05f30a7aef351f06654693151c4334a14ed33b6d..100df3c8a76f3170b671d8a231f2409f1aaeaa33 100644
+--- a/es/layouts/QueryFilter/index.js
++++ b/es/layouts/QueryFilter/index.js
+@@ -11,7 +11,7 @@ import "antd/es/col/style";
+ import _Col from "antd/es/col";
+ import _slicedToArray from "@babel/runtime/helpers/esm/slicedToArray";
+ import _objectSpread from "@babel/runtime/helpers/esm/objectSpread2";
+-var _excluded = ["collapsed", "layout", "defaultCollapsed", "defaultColsNumber", "span", "searchGutter", "searchText", "resetText", "optionRender", "collapseRender", "onReset", "onCollapse", "labelWidth", "style", "split", "preserve", "ignoreRules", "showHiddenNum"];
++var _excluded = ["collapsed", "layout", "defaultCollapsed", "defaultColsNumber", "defaultRowsNumber", "span", "searchGutter", "searchText", "resetText", "optionRender", "collapseRender", "onReset", "onCollapse", "labelWidth", "style", "split", "preserve", "ignoreRules", "showHiddenNum"];
+ 
+ var _document, _document$body;
+ 
+@@ -146,6 +146,9 @@ var QueryFilterContent = function QueryFilterContent(props) {
+ 
+     // 如果 formItem 自己配置了 hidden，默认使用它自己的
+     var colSize = /*#__PURE__*/React.isValidElement(item) ? (_item$props$colSize = item === null || item === void 0 ? void 0 : (_item$props3 = item.props) === null || _item$props3 === void 0 ? void 0 : _item$props3.colSize) !== null && _item$props$colSize !== void 0 ? _item$props$colSize : 1 : 1;
++    // --add--start--colSize在不同分辨率下取最小值---dengjiao
++    colSize = Math.min(24 / spanSize.span, colSize)
++    //--end
+     var colSpan = Math.min(spanSize.span * (colSize || 1), 24); // 计算总的 totalSpan 长度
+ 
+     totalSpan += colSpan; // 计算总的 colSize 长度
+@@ -154,8 +157,9 @@ var QueryFilterContent = function QueryFilterContent(props) {
+ 
+     if (index === 0) {
+       var _item$props4;
+-
+-      firstRowFull = colSpan === 24 && !(item === null || item === void 0 ? void 0 : (_item$props4 = item.props) === null || _item$props4 === void 0 ? void 0 : _item$props4.hidden);
++      //--add--start--注释改行--dengjiao
++      // firstRowFull = colSpan === 24 && !(item === null || item === void 0 ? void 0 : (_item$props4 = item.props) === null || _item$props4 === void 0 ? void 0 : _item$props4.hidden);
++      //--end--
+     }
+ 
+     var hidden = (item === null || item === void 0 ? void 0 : (_item$props5 = item.props) === null || _item$props5 === void 0 ? void 0 : _item$props5.hidden) || // 如果收起了
+@@ -276,6 +280,7 @@ function QueryFilter(props) {
+       _props$defaultCollaps = props.defaultCollapsed,
+       defaultCollapsed = _props$defaultCollaps === void 0 ? true : _props$defaultCollaps,
+       defaultColsNumber = props.defaultColsNumber,
++      defaultRowsNumber = props.defaultRowsNumber,
+       span = props.span,
+       _props$searchGutter = props.searchGutter,
+       searchGutter = _props$searchGutter === void 0 ? 24 : _props$searchGutter,
+@@ -314,6 +319,11 @@ function QueryFilter(props) {
+     if (defaultColsNumber !== undefined) {
+       return defaultColsNumber - 1;
+     }
++    //--add--start--defaultRowsNumber根据行返回showLength--dengjiao
++    if (defaultRowsNumber !== undefined) {
++      return defaultRowsNumber * (24 / spanSize.span)
++    }
++    //--add--end--
+ 
+     return Math.max(1, 24 / spanSize.span - 1);
+   }, [defaultColsNumber, spanSize.span]);
+diff --git a/lib/layouts/QueryFilter/index.d.ts b/lib/layouts/QueryFilter/index.d.ts
+index 1efacb9acae79dc7420a8991be12aae2564ec0f1..dec4172b1dfc00fb663d689604022cb77ffff604 100644
+--- a/lib/layouts/QueryFilter/index.d.ts
++++ b/lib/layouts/QueryFilter/index.d.ts
+@@ -20,6 +20,7 @@ export declare type BaseQueryFilterProps = Omit<ActionsProps, 'submitter' | 'set
+      */
+     layout?: FormProps['layout'];
+     defaultColsNumber?: number;
++    defaultRowsNumber?: number;
+     /**
+      * @name 文字标签的宽度
+      *
+diff --git a/lib/layouts/QueryFilter/index.js b/lib/layouts/QueryFilter/index.js
+index 3b8916563acf691fc5b63521d0df65297bfa218c..aa3bafa15f76cabff2cb2bfd39073ec1d8d926d9 100644
+--- a/lib/layouts/QueryFilter/index.js
++++ b/lib/layouts/QueryFilter/index.js
+@@ -53,7 +53,7 @@ var _BaseForm = require("../../BaseForm");
+ 
+ var _Actions = _interopRequireDefault(require("./Actions"));
+ 
+-var _excluded = ["collapsed", "layout", "defaultCollapsed", "defaultColsNumber", "span", "searchGutter", "searchText", "resetText", "optionRender", "collapseRender", "onReset", "onCollapse", "labelWidth", "style", "split", "preserve", "ignoreRules", "showHiddenNum"];
++var _excluded = ["collapsed", "layout", "defaultCollapsed", "defaultColsNumber", "defaultRowsNumber", "span", "searchGutter", "searchText", "resetText", "optionRender", "collapseRender", "onReset", "onCollapse", "labelWidth", "style", "split", "preserve", "ignoreRules", "showHiddenNum"];
+ 
+ var _document, _document$body;
+ 
+@@ -177,6 +177,8 @@ var QueryFilterContent = function QueryFilterContent(props) {
+ 
+     // 如果 formItem 自己配置了 hidden，默认使用它自己的
+     var colSize = /*#__PURE__*/_react.default.isValidElement(item) ? (_item$props$colSize = item === null || item === void 0 ? void 0 : (_item$props3 = item.props) === null || _item$props3 === void 0 ? void 0 : _item$props3.colSize) !== null && _item$props$colSize !== void 0 ? _item$props$colSize : 1 : 1;
++    //colSize在不同分辨率下取最小值
++    colSize = Math.min(24 / spanSize.span, colSize)
+     var colSpan = Math.min(spanSize.span * (colSize || 1), 24); // 计算总的 totalSpan 长度
+ 
+     totalSpan += colSpan; // 计算总的 colSize 长度
+@@ -186,7 +188,7 @@ var QueryFilterContent = function QueryFilterContent(props) {
+     if (index === 0) {
+       var _item$props4;
+ 
+-      firstRowFull = colSpan === 24 && !(item === null || item === void 0 ? void 0 : (_item$props4 = item.props) === null || _item$props4 === void 0 ? void 0 : _item$props4.hidden);
++      // firstRowFull = colSpan === 24 && !(item === null || item === void 0 ? void 0 : (_item$props4 = item.props) === null || _item$props4 === void 0 ? void 0 : _item$props4.hidden);
+     }
+ 
+     var hidden = (item === null || item === void 0 ? void 0 : (_item$props5 = item.props) === null || _item$props5 === void 0 ? void 0 : _item$props5.hidden) || // 如果收起了
+@@ -306,6 +308,7 @@ function QueryFilter(props) {
+       _props$defaultCollaps = props.defaultCollapsed,
+       defaultCollapsed = _props$defaultCollaps === void 0 ? true : _props$defaultCollaps,
+       defaultColsNumber = props.defaultColsNumber,
++      defaultRowsNumber = props.defaultRowsNumber,
+       span = props.span,
+       _props$searchGutter = props.searchGutter,
+       searchGutter = _props$searchGutter === void 0 ? 24 : _props$searchGutter,
+@@ -343,6 +346,9 @@ function QueryFilter(props) {
+     if (defaultColsNumber !== undefined) {
+       return defaultColsNumber - 1;
+     }
++    if (defaultRowsNumber !== undefined) {
++      return defaultRowsNumber * (24 / spanSize.span)
++    }
+ 
+     return Math.max(1, 24 / spanSize.span - 1);
+   }, [defaultColsNumber, spanSize.span]);
