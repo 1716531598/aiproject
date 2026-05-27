@@ -4,7 +4,7 @@
 
 ## 技术栈
 
-Flask 3.1 / SQLAlchemy 2.0 / Redis 5.2 / bcrypt 4.3 / Pillow 11.3 / python-dotenv / flask-cors
+Flask 3.1 / SQLAlchemy 2.0 / Redis 5.2 / bcrypt 4.3 / Pillow 11.3 / flask-cors
 
 ## 统一响应格式
 

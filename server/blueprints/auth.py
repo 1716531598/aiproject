@@ -1,4 +1,3 @@
-import os
 import uuid
 import bcrypt
 from flask import Blueprint, request, make_response
@@ -7,6 +6,7 @@ from utils.db import SessionLocal
 from utils.redis_client import get_redis
 from utils.response import success, error
 from utils.captcha import generate_captcha
+from config import _conf_get
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
@@ -39,7 +39,7 @@ def create_code():
     temp_sid = str(uuid.uuid4())
     r.setex(f"captcha:{temp_sid}", 300, code)
     response_data = {"imgCode": img_base64}
-    if os.getenv("E2E_MODE") == "true":
+    if _conf_get("E2E_MODE") == "true":
         response_data["code"] = code
     resp = make_response(success(response_data, msg="创建验证码成功"))
     resp.set_cookie("temp_sid", temp_sid, httponly=True, samesite="Lax")

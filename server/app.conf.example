@@ -1,0 +1,31 @@
+[server]
+# Flask 运行环境: development / production / testing
+FLASK_ENV = development
+
+# 密钥（生产环境务必修改为随机字符串）
+SECRET_KEY = ironman-secret-key-change-in-production
+
+# PostgreSQL
+PG_HOST = localhost
+PG_PORT = 5432
+PG_USER = postgres
+PG_PASSWORD = Test@123
+PG_DATABASE = ironman
+# 测试环境数据库（仅 FLASK_ENV=testing 时使用）
+PG_DATABASE_TEST = ironman_test
+
+# Redis
+REDIS_HOST = localhost
+REDIS_PORT = 6379
+REDIS_PASSWORD = Test@123
+REDIS_DB = 0
+
+# Flask 服务监听
+HOST = 0.0.0.0
+PORT = 888
+
+# 仪表盘数据模式: mock（模拟数据）/ real（真实数据）
+DASHBOARD_MODE = mock
+
+# E2E 测试模式: 设为 true 时验证码接口返回明文（仅限测试环境）
+# E2E_MODE = true
