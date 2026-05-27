@@ -44,6 +44,21 @@ pnpm-debug.log*
 # Test coverage
 coverage/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Server env
+server/.env
+
 # Temporary files
 *.tmp
 *.temp
+cookies.txt
+
+# Claude Code local settings (skills/ is tracked for team sharing)
+.claude/settings.local.json
