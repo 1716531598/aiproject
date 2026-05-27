@@ -31,11 +31,18 @@ export const errorConfig: RequestConfig = {
     errorThrower: (res) => {
       const { success, data, errorCode, errorMessage, showType } =
         res as unknown as ResponseStructure;
-      if (!success) {
-        const error: any = new Error(errorMessage);
+      const isSuccess = success || (res as any).code === 200;
+      if (!isSuccess) {
+        const displayMessage = errorMessage || (res as any).msg;
+        const error: any = new Error(displayMessage);
         error.name = 'BizError';
-        error.info = { errorCode, errorMessage, showType, data };
-        throw error; // 抛出自制的错误
+        error.info = {
+          errorCode: errorCode || (res as any).code,
+          errorMessage: displayMessage,
+          showType,
+          data,
+        };
+        throw error;
       }
     },
     // 错误接收及处理
@@ -98,11 +105,10 @@ export const errorConfig: RequestConfig = {
   // 响应拦截器
   responseInterceptors: [
     (response) => {
-      // 拦截响应数据，进行个性化处理
-      const { data } = response as unknown as ResponseStructure;
-
-      if (data?.success === false) {
-        message.error('请求失败！');
+      // 适配后端 { code, data, msg, msgType } 响应格式
+      const respData = response.data;
+      if (respData && typeof respData.code === 'number') {
+        respData.success = respData.code === 200;
       }
       return response;
     },

@@ -1,10 +1,10 @@
 import { PlusOutlined } from '@ant-design/icons';
 import { ModalForm, ProTable } from '@ant-design/pro-components';
-import { Button, Form, Input, Tag, Tree, theme } from 'antd';
+import { Button, Form, Input, Tag, Tree, theme, message } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { apiRoleQuery, apiRoleAdd, apiRoleUpdate, apiRoleDelete } from './service';
 
-// 菜单树定义，与路由结构对应
 const MENU_TREE: DataNode[] = [
   {
     title: '系统配置',
@@ -25,13 +25,6 @@ interface RoleItem {
   checkedKeys: string[];
 }
 
-const DEFAULT_ROLES: RoleItem[] = [
-  { id: 1, name: '超级管理员', builtIn: true, checkedKeys: ['common', 'common/dashboard', 'common/user', 'common/role', 'common/auditlog'] },
-  { id: 2, name: '普通用户', builtIn: true, checkedKeys: ['common', 'common/dashboard'] },
-  { id: 3, name: '审计角色', builtIn: true, checkedKeys: ['common', 'common/auditlog'] },
-];
-
-// 从 checkedKeys 中提取功能组和功能菜单的展示信息
 function getGroupMenuDisplay(checkedKeys: string[]) {
   const result: { group: string; menus: string[] }[] = [];
   const menuMap: Record<string, string> = {
@@ -41,7 +34,6 @@ function getGroupMenuDisplay(checkedKeys: string[]) {
     'common/auditlog': '审计日志',
   };
   const groupMap: Record<string, string> = { common: '系统配置' };
-  // 按 key 前缀分组
   const grouped: Record<string, string[]> = {};
   for (const key of checkedKeys) {
     if (key.includes('/')) {
@@ -59,16 +51,25 @@ function getGroupMenuDisplay(checkedKeys: string[]) {
   return result;
 }
 
-let nextId = 100;
-
 const Role = () => {
   const { token } = theme.useToken();
   const actionRef = useRef();
-  const [roles, setRoles] = useState<RoleItem[]>(DEFAULT_ROLES);
+  const [roles, setRoles] = useState<RoleItem[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleItem | null>(null);
   const [form] = Form.useForm();
   const menus = Form.useWatch('menus', form);
+
+  const fetchRoles = async () => {
+    const { code, data = {} } = await apiRoleQuery();
+    if (code === 200) {
+      setRoles(data.aaData || []);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
 
   const columns = [
     {
@@ -124,32 +125,48 @@ const Role = () => {
   const handleEdit = (role: RoleItem) => {
     setEditingRole(role);
     setModalVisible(true);
+    setTimeout(() => {
+      form.setFieldsValue({ name: role.name, menus: role.checkedKeys });
+    }, 0);
   };
 
-  const handleDelete = (role: RoleItem) => {
-    setRoles((prev) => prev.filter((r) => r.id !== role.id));
+  const handleDelete = async (role: RoleItem) => {
+    const { code, msgType, msg } = await apiRoleDelete({ id: role.id });
+    message[msgType === 'success' ? 'success' : 'error'](msg);
+    if (code === 200) {
+      fetchRoles();
+    }
   };
 
   const handleAdd = () => {
     setEditingRole(null);
     setModalVisible(true);
+    setTimeout(() => {
+      form.resetFields();
+    }, 0);
   };
 
   const onFinish = async (values: { name: string; menus: string[] }) => {
-    // 收集所有选中的 key（包含父节点和子节点）
     const checkedKeys = values.menus || [];
     if (editingRole) {
-      setRoles((prev) =>
-        prev.map((r) => (r.id === editingRole.id ? { ...r, name: values.name, checkedKeys } : r)),
-      );
+      const { code, msgType, msg } = await apiRoleUpdate({
+        id: editingRole.id,
+        name: values.name,
+        checkedKeys,
+      });
+      message[msgType === 'success' ? 'success' : 'error'](msg);
+      if (code !== 200) return false;
     } else {
-      setRoles((prev) => [
-        ...prev,
-        { id: nextId++, name: values.name, builtIn: false, checkedKeys },
-      ]);
+      const { code, msgType, msg } = await apiRoleAdd({
+        name: values.name,
+        checkedKeys,
+      });
+      message[msgType === 'success' ? 'success' : 'error'](msg);
+      if (code !== 200) return false;
     }
     setModalVisible(false);
     setEditingRole(null);
+    fetchRoles();
     return true;
   };
 
@@ -188,13 +205,9 @@ const Role = () => {
           onCancel: () => {
             setModalVisible(false);
             setEditingRole(null);
+            form.resetFields();
           },
         }}
-        initialValues={
-          editingRole
-            ? { name: editingRole.name, menus: editingRole.checkedKeys }
-            : { name: '', menus: [] }
-        }
       >
         <Form.Item
           label="角色名称"

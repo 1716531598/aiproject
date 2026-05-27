@@ -21,6 +21,7 @@ import { useRef, useState } from 'react';
 import {
   apiUserMgrAdd,
   apiUserMgrDelete,
+  apiUserMgrUpdate,
   apiUserMgRestpwd,
   apiUserQuery,
 } from './service';
@@ -50,12 +51,14 @@ const User = () => {
   };
 
   const onFinish = async (vaule) => {
+    const apiCall = modalTitle === '编辑用户'
+      ? apiUserMgrUpdate({ ...vaule, id: current.id })
+      : apiUserMgrAdd({ ...vaule });
     const {
       code = 470,
-      msgType = 'info',
       msg = '',
-    } = await apiUserMgrAdd({ ...vaule });
-    message[msgType](msg);
+    } = await apiCall;
+    message[code === 200 ? 'success' : 'error'](msg);
     if (code == 200) {
       actionRef.current.reload();
       setVisible(false);
@@ -74,7 +77,7 @@ const User = () => {
           msgType = 'info',
           msg = '',
         } = await apiUserMgrDelete({ id });
-        message[msgType](msg);
+        message[msgType === 'success' ? 'success' : 'error'](msg);
         code == 200 && actionRef.current.reload();
       },
     });
@@ -95,7 +98,7 @@ const User = () => {
   const resetItem = (item) => {
     Modal.confirm({
       title: '密码重置',
-      content: '密码将重置为 adMin@123 ，确认重置？',
+      content: '密码将重置为 Test@123 ，确认重置？',
       okText: '确认',
       cancelText: '取消',
       onOk: async () => {
@@ -104,7 +107,7 @@ const User = () => {
           msgType = 'info',
           msg = '',
         } = await apiUserMgRestpwd({ user_id: item.id });
-        message[msgType](msg);
+        message[msgType === 'success' ? 'success' : 'error'](msg);
       },
     });
   };

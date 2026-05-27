@@ -45,7 +45,7 @@ const Login: React.FC = () => {
     try {
       // 登录
       const msg = await login({ ...values, type });
-      if (msg.status === 'ok') {
+      if (msg.code === 200) {
         const defaultLoginSuccessMessage = intl.formatMessage({
           id: 'pages.login.success',
           defaultMessage: '登录成功！',
@@ -55,14 +55,11 @@ const Login: React.FC = () => {
         history.push('/common/dashboard');
         return;
       }
-      message.error('账户或密码错误(admin/Test@123)');
-    } catch (error) {
-      const defaultLoginFailureMessage = intl.formatMessage({
-        id: 'pages.login.failure',
-        defaultMessage: '登录失败，请重试！',
-      });
       loadCode();
-      message.error(defaultLoginFailureMessage);
+      message.error(msg.msg || '用户名或密码错误');
+    } catch (error) {
+      loadCode();
+      message.error('登录失败，请重试！');
     }
   };
 

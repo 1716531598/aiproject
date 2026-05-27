@@ -114,7 +114,7 @@ const Analysis: FC<AnalysisProps> = () => {
     },
   ];
   const activeKey =
-    currentTabKey || (data?.offlineData[0] && data?.offlineData[0].name) || '';
+    currentTabKey || (data?.offlineData?.[0] && data?.offlineData[0].name) || '';
 
   const colors = loadThemeColor();
   return (
