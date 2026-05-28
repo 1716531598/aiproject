@@ -184,12 +184,14 @@ npx playwright install
 
 ### 6.2 运行测试
 
-需要先以 E2E 模式启动后端（验证码返回明文）。在 `server/app.conf` 中取消注释 `E2E_MODE = true`，然后启动：
+需要先以 E2E 模式启动后端（验证码返回明文）。有两种方式：
 
 ```bash
-# 后端（另开终端）
-cd server
-python app.py
+# 方式一：环境变量（推荐，无需修改文件）
+cd server && E2E_MODE=true python app.py
+
+# 方式二：在 app.conf 中设置 E2E_MODE = true，然后
+cd server && python app.py
 ```
 
 然后执行测试：

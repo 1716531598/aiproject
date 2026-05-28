@@ -9,7 +9,7 @@ SECRET_KEY = ironman-secret-key-change-in-production
 PG_HOST = localhost
 PG_PORT = 5432
 PG_USER = postgres
-PG_PASSWORD = Test@123
+PG_PASSWORD = your_password
 PG_DATABASE = ironman
 # 测试环境数据库（仅 FLASK_ENV=testing 时使用）
 PG_DATABASE_TEST = ironman_test
@@ -17,7 +17,7 @@ PG_DATABASE_TEST = ironman_test
 # Redis
 REDIS_HOST = localhost
 REDIS_PORT = 6379
-REDIS_PASSWORD = Test@123
+REDIS_PASSWORD = your_password
 REDIS_DB = 0
 
 # Flask 服务监听

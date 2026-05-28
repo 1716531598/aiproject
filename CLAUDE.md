@@ -36,7 +36,7 @@ D:\code\ironman\
 - **统一响应格式**：后端所有接口返回 `{code, success, data, msg, msgType}`，前端 `errorThrower` 检查 `success || code === 200`
 - **认证方式**：Cookie `sid` → Redis session，后端 `get_current_user()` 解析，前端 `getInitialState` 获取
 - **种子用户**：admin / user / audit，密码均为 `Test@123`
-- **E2E 测试模式**：`E2E_MODE=true` 启动后端，验证码接口返回明文
+- **E2E 测试模式**：通过环境变量 `E2E_MODE=true` 或 `app.conf` 中 `E2E_MODE = true` 启动后端，验证码接口返回明文
 
 ## 常用命令
 
