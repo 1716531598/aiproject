@@ -1,95 +1,98 @@
 import sys
 import os
+import glob
+import bcrypt
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import bcrypt
+from alembic.config import Config as AlembicConfig
+from alembic import command
+from sqlalchemy import text
+
 from config import get_config
-from utils.db import init_db, SessionLocal, Base
+from utils.db import init_db, get_session
 from utils.redis_client import init_redis
-from models import User, Role, Permission, RolePermission
+
+SEEDS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "seeds")
+DEFAULT_PASSWORD = "Test@123"
+
+
+def _hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _get_seed_sql_files() -> list:
+    """Return sorted list of .sql files under seeds directory."""
+    pattern = os.path.join(SEEDS_DIR, "*.sql")
+    return sorted(glob.glob(pattern))
+
+
+def _inject_password_hashes(sql_content: str) -> str:
+    """Replace password placeholders with bcrypt hashes."""
+    placeholders = {
+        "{{ADMIN_PASSWORD_HASH}}": _hash_password(DEFAULT_PASSWORD),
+        "{{USER_PASSWORD_HASH}}": _hash_password(DEFAULT_PASSWORD),
+        "{{AUDIT_PASSWORD_HASH}}": _hash_password(DEFAULT_PASSWORD),
+    }
+    for placeholder, hashed in placeholders.items():
+        sql_content = sql_content.replace(placeholder, hashed)
+    return sql_content
+
+
+def run_migrations():
+    """Run Alembic migrations to head revision."""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    alembic_ini = os.path.join(project_root, "alembic.ini")
+    if not os.path.exists(alembic_ini):
+        raise FileNotFoundError(f"alembic.ini not found at {alembic_ini}")
+    alembic_cfg = AlembicConfig(alembic_ini)
+    command.upgrade(alembic_cfg, "head")
+    print("Database migrations applied (head).")
+
+
+def run_seeds(session):
+    """Execute seed SQL files in order within the given session."""
+    sql_files = _get_seed_sql_files()
+    if not sql_files:
+        print("No seed SQL files found.")
+        return
+
+    for file_path in sql_files:
+        filename = os.path.basename(file_path)
+        print(f"Applying seed: {filename} ...")
+        with open(file_path, "r", encoding="utf-8") as f:
+            raw_sql = f.read()
+
+        # Inject dynamic values (e.g., password hashes)
+        sql = _inject_password_hashes(raw_sql)
+
+        # Execute SQL safely via SQLAlchemy text()
+        session.execute(text(sql))
+
+    print("Seed data inserted successfully.")
 
 
 def seed():
     config = get_config()
-    engine = init_db(config)
-    Base.metadata.create_all(engine)
+
+    # 1. Ensure DB connection & Redis
+    init_db(config)
     init_redis(config)
 
-    db = SessionLocal()
+    # 2. Run schema migrations (Alembic)
+    run_migrations()
+
+    # 3. Run seed data (SQL files)
+    session = get_session()
     try:
-        # seed roles
-        roles_data = [
-            {"id": 1, "name": "超级管理员", "built_in": True, "description": "拥有所有权限"},
-            {"id": 2, "name": "普通用户", "built_in": True, "description": "基本访问权限"},
-            {"id": 3, "name": "审计角色", "built_in": True, "description": "审计日志查看权限"},
-        ]
-        for rd in roles_data:
-            if not db.query(Role).filter(Role.id == rd["id"]).first():
-                db.add(Role(**rd))
-        db.flush()
-
-        # seed permissions
-        perms_data = [
-            {"key": "common", "name": "系统配置", "parent_key": None, "sort_order": 0},
-            {"key": "common/dashboard", "name": "主页面", "parent_key": "common", "sort_order": 1},
-            {"key": "common/user", "name": "用户管理", "parent_key": "common", "sort_order": 2},
-            {"key": "common/role", "name": "角色管理", "parent_key": "common", "sort_order": 3},
-            {"key": "common/auditlog", "name": "审计日志", "parent_key": "common", "sort_order": 4},
-        ]
-        perm_map = {}
-        for pd in perms_data:
-            perm = db.query(Permission).filter(Permission.key == pd["key"]).first()
-            if not perm:
-                perm = Permission(**pd)
-                db.add(perm)
-                db.flush()
-            perm_map[pd["key"]] = perm.id
-
-        # seed role_permissions
-        role_perms = {
-            1: ["common", "common/dashboard", "common/user", "common/role", "common/auditlog"],
-            2: ["common", "common/dashboard"],
-            3: ["common", "common/auditlog"],
-        }
-        for role_id, keys in role_perms.items():
-            for key in keys:
-                pid = perm_map.get(key)
-                if pid:
-                    exists = db.query(RolePermission).filter(
-                        RolePermission.role_id == role_id,
-                        RolePermission.permission_id == pid,
-                    ).first()
-                    if not exists:
-                        db.add(RolePermission(role_id=role_id, permission_id=pid))
-        db.flush()
-
-        # seed users
-        users_data = [
-            {"name": "admin", "role_id": 1, "parent_id": None},
-            {"name": "user", "role_id": 2, "parent_id": None},
-            {"name": "audit", "role_id": 3, "parent_id": None},
-        ]
-        for ud in users_data:
-            if not db.query(User).filter(User.name == ud["name"]).first():
-                pw_hash = bcrypt.hashpw("Test@123".encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-                db.add(User(
-                    name=ud["name"],
-                    password_hash=pw_hash,
-                    role_id=ud["role_id"],
-                    parent_id=ud.get("parent_id"),
-                    is_login=1,
-                    errcount=5,
-                    timeout=30,
-                ))
-
-        db.commit()
-        print("Seed data inserted successfully.")
+        run_seeds(session)
+        session.commit()
     except Exception as e:
-        db.rollback()
+        session.rollback()
         print(f"Seed error: {e}")
         raise
     finally:
-        db.close()
+        session.close()
 
 
 if __name__ == "__main__":

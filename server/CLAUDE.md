@@ -94,18 +94,100 @@ paginate(data_list, page, page_size, total)  # → {aaData, page, pageSize, tota
 - `msg` 应包含具体变更内容
 - 新增接口涉及用户活动时，必须同步添加审计日志
 
-## 数据库变更
+## 数据库架构与初始化（严格规范）
 
-未配置自动迁移（Alembic）。结构变更需手动执行：
+**Schema 演进** 与 **初始数据（Seed）** 采用职责分离模式，所有新增功能需要建表时必须遵循。
+
+### 职责分离
+
+| 目录/文件 | 职责 | 禁止事项 |
+|-----------|------|----------|
+| `migrations/versions/*.py` | **Schema 定义与变更**（CREATE / ALTER / DROP TABLE、INDEX） | 禁止写入 INSERT / UPDATE / DELETE 等业务数据 |
+| `seeds/*.sql` | **初始数据**（INSERT INTO） | 禁止写入 DDL（CREATE TABLE 等） |
+| `seed/init_data.py` | **一键初始化入口**：先执行 Alembic upgrade，再按序执行 seeds | 禁止在此硬编码业务数据 |
+
+### 目录结构
+
+```
+server/
+├── alembic.ini                 # Alembic 配置（URL 由 env.py 动态读取）
+├── migrations/
+│   ├── env.py                  # Alembic 环境配置，引用 models.Base.metadata
+│   └── versions/
+│       └── f05542d1e42d_baseline.py   # 初始迁移（所有基表 DDL）
+├── seeds/
+│   ├── 001_roles.sql
+│   ├── 002_permissions.sql
+│   ├── 003_role_permissions.sql
+│   └── 004_users.sql           # 含 {{ADMIN_PASSWORD_HASH}} 占位符
+└── seed/
+    └── init_data.py            # 初始化入口脚本
+```
+
+### 新建表的完整流程（必须遵循）
+
+1. **定义模型**：在 `models/` 新增模型类，继承 `utils.db.Base`，并导入 `models/__init__.py`。
+2. **生成迁移**：
+   ```bash
+   alembic revision --autogenerate -m "add xxx table"
+   ```
+3. **审阅迁移脚本**：打开 `migrations/versions/xxxx_add_xxx_table.py`，确认 `upgrade()` / `downgrade()` 正确，**删除其中自带的 INSERT / UPDATE 逻辑**（数据必须走 seeds）。
+4. **执行迁移**：
+   ```bash
+   alembic upgrade head
+   ```
+5. **添加 Seed（如需要）**：
+   - 在 `seeds/` 新建 `005_xxx.sql`（按序号排序）。
+   - SQL 必须幂等：使用 `ON CONFLICT DO NOTHING` 或 `ON CONFLICT ON CONSTRAINT ... DO NOTHING`。
+   - 若需动态值（如 bcrypt 密码），在 SQL 中使用占位符（如 `{{XXX_PASSWORD_HASH}}`），并在 `seed/init_data.py` 的 `_inject_password_hashes()` 中实现替换。
+6. **验证**：
+   ```bash
+   python seed/init_data.py
+   ```
+
+### 改表结构（ALTER TABLE）
+
+- **只允许通过 Alembic migration**，禁止手工执行 `ALTER TABLE`。
+- 流程：`alembic revision --autogenerate -m "xxx"` → 审阅 → `alembic upgrade head`。
+- **禁止**在 `app.py` 或任何业务代码中调用 `Base.metadata.create_all()`。
+
+### 初始数据规范（Seed SQL）
+
+- **文件命名**：`{序号}_{模块}.sql`，如 `001_roles.sql`。
+- **字符编码**：UTF-8。
+- **幂等性**：每条 INSERT 语句必须带 `ON CONFLICT DO NOTHING`，或显式指定唯一约束：
+  ```sql
+  INSERT INTO role_permissions (role_id, permission_id) VALUES (1, 1)
+  ON CONFLICT ON CONSTRAINT role_permissions_role_id_permission_id_key DO NOTHING;
+  ```
+- **序列重置**：若显式插入 `id`，末尾必须更新序列：
+  ```sql
+  SELECT setval('roles_id_seq', COALESCE((SELECT MAX(id) FROM roles), 1));
+  ```
+- **禁止**在 seed SQL 中写 `CREATE TABLE`、`DROP TABLE`、`ALTER TABLE`。
+
+### 首次部署 / 全新环境初始化
 
 ```bash
-python -c "
-from sqlalchemy import create_engine, text
-engine = create_engine('postgresql://postgres:Test%40123@localhost:5432/ironman')
-with engine.connect() as conn:
-    conn.execute(text('ALTER TABLE ...'))
-    conn.commit()
-"
+# 一键完成：建表 + 初始数据
+python server/seed/init_data.py
+```
+
+内部执行顺序：
+1. `alembic upgrade head` — 创建/更新表结构。
+2. 按文件名排序执行 `seeds/*.sql` — 插入初始数据。
+
+### 独立执行 Migration（不跑 Seed）
+
+```bash
+# 仅升级表结构
+alembic upgrade head
+
+# 查看当前版本
+alembic current
+
+# 回退一级（危险，生产环境慎用）
+alembic downgrade -1
 ```
 
 ## 注意事项
