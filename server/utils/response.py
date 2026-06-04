@@ -2,7 +2,7 @@ from flask import jsonify
 
 
 def success(data=None, msg="操作成功", msg_type="success"):
-    return jsonify({"code": 200, "success": True, "data": data or {}, "msg": msg, "msgType": msg_type})
+    return jsonify({"code": 200, "success": True, "data": {} if data is None else data, "msg": msg, "msgType": msg_type})
 
 
 def error(msg="操作失败", code=400, data=None, msg_type="error"):
