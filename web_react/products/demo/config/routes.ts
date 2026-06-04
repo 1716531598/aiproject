@@ -51,6 +51,78 @@ export default [
     ],
   },
   {
+    path: '/issue',
+    name: '问题管理',
+    icon: 'bug',
+    routes: [
+      {
+        path: '/issue',
+        redirect: '/issue/bugs',
+      },
+      {
+        path: '/issue/bugs',
+        name: '网上问题',
+        component: `${commonRelativeUrl}/Issue/BugList`,
+        access: 'canIssue',
+      },
+      {
+        path: '/issue/bugs/:id',
+        name: '问题详情',
+        hideInMenu: true,
+        component: `${commonRelativeUrl}/Issue/BugList/Detail`,
+        access: 'canIssue',
+      },
+      {
+        path: '/issue/responsibility',
+        name: '责任分配',
+        component: `${commonRelativeUrl}/Issue/Responsibility`,
+        access: 'canIssue',
+      },
+      {
+        path: '/issue/poc',
+        name: 'PoC 风险',
+        component: `${commonRelativeUrl}/Issue/PocList`,
+        access: 'canIssue',
+      },
+      {
+        path: '/issue/statistic',
+        name: '统计分析',
+        component: `${commonRelativeUrl}/Issue/Statistic`,
+        access: 'canIssue',
+      },
+      {
+        path: '/issue/admin',
+        name: '系统管理',
+        routes: [
+          {
+            path: '/issue/admin/products',
+            name: '产品管理',
+            component: `${commonRelativeUrl}/Issue/Product`,
+            access: 'canIssue',
+          },
+          {
+            path: '/issue/admin/staffs',
+            name: '人员档案',
+            component: `${commonRelativeUrl}/Issue/Staff`,
+            access: 'canIssue',
+          },
+          {
+            path: '/issue/admin/versions',
+            name: '版本管理',
+            component: `${commonRelativeUrl}/Issue/Version`,
+            access: 'canIssue',
+          },
+          {
+            path: '/issue/admin/assessment',
+            name: '考核配置',
+            component: `${commonRelativeUrl}/Issue/Assessment`,
+            access: 'canIssue',
+          },
+        ],
+      },
+    ],
+  },
+  {
     path: '/',
     redirect: '/user/login',
   },

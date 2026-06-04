@@ -24,12 +24,26 @@ def create_app():
     from blueprints.role import role_bp
     from blueprints.audit_log import audit_log_bp
     from blueprints.dashboard import dashboard_bp
+    from blueprints.issue_admin import issue_admin_bp
+    from blueprints.issue_bug import issue_bug_bp
+    from blueprints.issue_poc import issue_poc_bp
+    from blueprints.issue_product import issue_product_bp
+    from blueprints.issue_responsibility import issue_responsibility_bp
+    from blueprints.issue_staff import issue_staff_bp
+    from blueprints.issue_statistic import issue_statistic_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(role_bp)
     app.register_blueprint(audit_log_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(issue_product_bp)
+    app.register_blueprint(issue_staff_bp)
+    app.register_blueprint(issue_bug_bp)
+    app.register_blueprint(issue_responsibility_bp)
+    app.register_blueprint(issue_poc_bp)
+    app.register_blueprint(issue_statistic_bp)
+    app.register_blueprint(issue_admin_bp)
 
     return app
 

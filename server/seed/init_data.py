@@ -24,7 +24,10 @@ def _hash_password(pw: str) -> str:
 def _get_seed_sql_files() -> list:
     """Return sorted list of .sql files under seeds directory."""
     pattern = os.path.join(SEEDS_DIR, "*.sql")
-    return sorted(glob.glob(pattern))
+    files = sorted(glob.glob(pattern))
+    issue_pattern = os.path.join(SEEDS_DIR, "issue_seeds", "*.sql")
+    files.extend(sorted(glob.glob(issue_pattern)))
+    return files
 
 
 def _inject_password_hashes(sql_content: str) -> str:

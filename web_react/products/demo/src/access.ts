@@ -5,5 +5,6 @@ export default function access(initialState: { currentUser?: API.CurrentUser } |
     canDashboard: roleType === 1 || roleType === 2,
     canUser: roleType === 1,
     canAuditlog: roleType === 1 || roleType === 3,
+    canIssue: roleType === 1 || roleType === 2,
   };
 }
