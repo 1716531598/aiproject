@@ -32,6 +32,7 @@ def create_app():
     from blueprints.issue_responsibility import issue_responsibility_bp
     from blueprints.issue_staff import issue_staff_bp
     from blueprints.issue_statistic import issue_statistic_bp
+    from blueprints.issue_version import issue_version_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
@@ -41,6 +42,7 @@ def create_app():
     app.register_blueprint(issue_product_bp)
     app.register_blueprint(issue_staff_bp)
     app.register_blueprint(issue_module_bp)
+    app.register_blueprint(issue_version_bp)
     app.register_blueprint(issue_bug_bp)
     app.register_blueprint(issue_responsibility_bp)
     app.register_blueprint(issue_poc_bp)
