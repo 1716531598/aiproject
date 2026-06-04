@@ -21,6 +21,7 @@ class User(Base):
     is_login = Column(SmallInteger, default=1, nullable=False)
     errcount = Column(SmallInteger, default=5, nullable=False)
     timeout = Column(SmallInteger, default=30, nullable=False)
+    must_change_password = Column(SmallInteger, default=1, nullable=False)
     created_at = Column(DateTime, default=_now_cst)
     updated_at = Column(DateTime, default=_now_cst, onupdate=_now_cst)
 
@@ -36,6 +37,7 @@ class User(Base):
             "is_login": self.is_login,
             "errcount": self.errcount,
             "timeout": self.timeout,
+            "must_change_password": self.must_change_password,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -48,6 +50,7 @@ class User(Base):
             "is_login": self.is_login,
             "errcount": self.errcount,
             "timeout": self.timeout,
+            "must_change_password": self.must_change_password,
         }
         if self.role:
             result["role_name"] = self.role.name

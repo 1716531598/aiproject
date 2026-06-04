@@ -121,6 +121,7 @@ def login():
             "name": user.name,
             "role_id": user.role_id,
             "timeout": user.timeout,
+            "must_change_password": bool(user.must_change_password),
         })
         r.setex(f"session:{sid}", user.timeout * 60, session_data)
 
@@ -129,7 +130,10 @@ def login():
 
         # map role_id to access string
         access_map = {1: "admin", 2: "user", 3: "audit"}
-        resp = make_response(success({"access": access_map.get(user.role_id, "user")}))
+        resp = make_response(success({
+            "access": access_map.get(user.role_id, "user"),
+            "must_change_password": bool(user.must_change_password),
+        }))
         resp.set_cookie("sid", sid, httponly=True, samesite="Lax", max_age=user.timeout * 60)
         return resp
     finally:
@@ -188,5 +192,42 @@ def current_user():
             "address": "",
             "phone": "",
         })
+    finally:
+        db.close()
+
+
+@auth_bp.route("/change-password", methods=["POST"])
+def change_password():
+    session = get_current_user()
+    if not session:
+        return error("未登录", code=401)
+
+    data = request.get_json(force=True, silent=True) or {}
+    old_password = data.get("old_password", "")
+    new_password = data.get("new_password", "")
+
+    # Password strength check
+    if len(new_password) < 8 or not any(c.isupper() for c in new_password) \
+       or not any(c.islower() for c in new_password) or not any(c.isdigit() for c in new_password):
+        return error("密码强度不足：不少于8位，包含大小写字母和数字")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == session["id"]).first()
+        if not user or not bcrypt.checkpw(old_password.encode("utf-8"), user.password_hash.encode("utf-8")):
+            return error("旧密码错误")
+
+        user.password_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode()
+        user.must_change_password = 0
+        db.commit()
+
+        # Update Redis session
+        r = get_redis()
+        sid = _get_session_id()
+        session["must_change_password"] = False
+        import json
+        r.setex(f"session:{sid}", user.timeout * 60, json.dumps(session))
+
+        return success(msg="密码修改成功")
     finally:
         db.close()
