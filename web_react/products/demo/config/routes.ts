@@ -101,6 +101,12 @@ export default [
             access: 'canIssue',
           },
           {
+            path: '/issue/admin/modules',
+            name: '模块管理',
+            component: `${commonRelativeUrl}/Issue/Module`,
+            access: 'canIssue',
+          },
+          {
             path: '/issue/admin/staffs',
             name: '人员档案',
             component: `${commonRelativeUrl}/Issue/Staff`,
