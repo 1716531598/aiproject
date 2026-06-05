@@ -42,8 +42,14 @@ const statusColor = {
   重新打开: 'orange',
 };
 
+const getInitialProductId = () => {
+  const value = new URLSearchParams(window.location.search).get('product_id');
+  return value ? Number(value) || undefined : undefined;
+};
+
 const BugList = () => {
   const { token } = theme.useToken();
+  const initialProductId = getInitialProductId();
   const actionRef = useRef<any>();
   const [productOptions, setProductOptions] = useState<any[]>([]);
   const [issueTypeOptions, setIssueTypeOptions] = useState<any[]>([]);
@@ -72,7 +78,7 @@ const BugList = () => {
       page: params.current,
       pageSize: params.pageSize,
       keyword: params.keyword,
-      product_id: params.product_id,
+      product_id: params.product_id || initialProductId,
       severity: params.severity,
       status: params.status,
       issue_type_id: params.issue_type_id,
@@ -153,6 +159,7 @@ const BugList = () => {
       title: '产品',
       dataIndex: 'product_id',
       valueType: 'select',
+      initialValue: initialProductId,
       fieldProps: { options: productOptions, showSearch: true, optionFilterProp: 'label' },
       render: (_: any, record: any) => record.product_name,
       width: 160,

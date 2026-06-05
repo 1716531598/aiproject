@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, time
 
 from flask import Blueprint, request
 
 from blueprints.auth import get_current_user
-from models import IssueBug, IssueResponsibility, IssueStaff, IssueTodo
+from models import IssueBug, IssuePocProject, IssueProduct, IssueResponsibility, IssueStaff, IssueTodo
 from utils.db import SessionLocal
 from utils.permission import require_permission
 from utils.response import success
@@ -11,12 +11,136 @@ from utils.response import success
 issue_statistic_bp = Blueprint("issue_statistic", __name__, url_prefix="/api/issue/statistics")
 
 SEVERITY_SCORE = {1: 0.1, 2: 0.05, 3: 0.02, 4: 0}
+RESOLVED_STATUSES = {"已解决", "已关闭"}
+ACTIVE_STATUS = "激活"
+BLANK_VERSION_LABEL = "未填写影响版本"
+
+
+def _parse_date(value, end_of_day=False):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    if end_of_day and parsed.time() == time.min:
+        return datetime.combine(parsed.date(), time.max)
+    return parsed
+
+
+def _filtered_bug_query(db, data):
+    query = db.query(IssueBug)
+    start_date = _parse_date(data.get("start_date"))
+    end_date = _parse_date(data.get("end_date"), end_of_day=True)
+    if start_date:
+        query = query.filter(IssueBug.created_date >= start_date)
+    if end_date:
+        query = query.filter(IssueBug.created_date <= end_date)
+    if data.get("product_id"):
+        query = query.filter(IssueBug.product_id == data["product_id"])
+    return query
+
+
+def _bug_stat_summary(bugs):
+    total = len(bugs)
+    resolved = len([bug for bug in bugs if bug.status in RESOLVED_STATUSES])
+    active = len([bug for bug in bugs if bug.status == ACTIVE_STATUS])
+    return {
+        "total": total,
+        "resolved": resolved,
+        "active": active,
+        "resolve_rate": round(resolved / total, 4) if total else 0,
+    }
 
 
 @issue_statistic_bp.route("/overview", methods=["POST"])
 @require_permission("issue/stat_view")
 def overview():
-    return success(data={})
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        bug_summary = _bug_stat_summary(_filtered_bug_query(db, data).all())
+        poc_total = db.query(IssuePocProject).count()
+        poc_closed = (
+            db.query(IssuePocProject)
+            .filter(IssuePocProject.current_status.like("%完成%"))
+            .count()
+        )
+        return success(
+            data={
+                "bug_total": bug_summary["total"],
+                "bug_resolved": bug_summary["resolved"],
+                "bug_active": bug_summary["active"],
+                "resolve_rate": bug_summary["resolve_rate"],
+                "poc_total": poc_total,
+                "poc_closed": poc_closed,
+                "poc_active": poc_total - poc_closed,
+            }
+        )
+    finally:
+        db.close()
+
+
+@issue_statistic_bp.route("/by-product", methods=["POST"])
+@require_permission("issue/stat_view")
+def by_product():
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        bugs = _filtered_bug_query(db, data).all()
+        product_map = {product.id: product.name for product in db.query(IssueProduct).all()}
+        grouped = {}
+        for bug in bugs:
+            key = bug.product_id or 0
+            grouped.setdefault(key, []).append(bug)
+
+        result = []
+        for product_id, items in grouped.items():
+            summary = _bug_stat_summary(items)
+            result.append(
+                {
+                    "product_id": product_id or None,
+                    "product_name": product_map.get(product_id, "未关联产品"),
+                    **summary,
+                }
+            )
+        result.sort(key=lambda item: item["total"], reverse=True)
+        return success(data=result)
+    finally:
+        db.close()
+
+
+@issue_statistic_bp.route("/by-version", methods=["POST"])
+@require_permission("issue/stat_view")
+def by_version():
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        bugs = _filtered_bug_query(db, data).all()
+        product_map = {product.id: product.name for product in db.query(IssueProduct).all()}
+        grouped = {}
+        for bug in bugs:
+            version = (bug.affect_version or "").strip() or BLANK_VERSION_LABEL
+            key = (bug.product_id or 0, version)
+            grouped.setdefault(key, []).append(bug)
+
+        result = []
+        for (product_id, version), items in grouped.items():
+            summary = _bug_stat_summary(items)
+            result.append(
+                {
+                    "product_id": product_id or None,
+                    "product_name": product_map.get(product_id, "未关联产品"),
+                    "version": version,
+                    **summary,
+                }
+            )
+        result.sort(key=lambda item: item["total"], reverse=True)
+        return success(data=result)
+    finally:
+        db.close()
 
 
 @issue_statistic_bp.route("/my-summary", methods=["POST"])
@@ -35,7 +159,7 @@ def my_summary():
 
         active_bugs = (
             db.query(IssueBug)
-            .filter(IssueBug.staff_id == staff.id, IssueBug.status == "激活")
+            .filter(IssueBug.staff_id == staff.id, IssueBug.status == ACTIVE_STATUS)
             .order_by(IssueBug.created_date.desc())
             .limit(20)
             .all()
@@ -43,8 +167,8 @@ def my_summary():
         all_bugs = db.query(IssueBug).filter(IssueBug.staff_id == staff.id).all()
         bug_stats = {
             "total": len(all_bugs),
-            "resolved": len([bug for bug in all_bugs if bug.status in ("已解决", "已关闭")]),
-            "pending": len([bug for bug in all_bugs if bug.status == "激活"]),
+            "resolved": len([bug for bug in all_bugs if bug.status in RESOLVED_STATUSES]),
+            "pending": len([bug for bug in all_bugs if bug.status == ACTIVE_STATUS]),
         }
 
         todos = (
