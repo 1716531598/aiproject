@@ -98,6 +98,12 @@ export default [
         access: 'canIssue',
       },
       {
+        path: '/issue/todos',
+        name: '全部 TODO',
+        component: `${commonRelativeUrl}/Issue/TodoList`,
+        access: 'canIssue',
+      },
+      {
         path: '/issue/statistic',
         name: '统计分析',
         component: `${commonRelativeUrl}/Issue/Statistic`,

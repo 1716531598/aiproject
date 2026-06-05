@@ -283,6 +283,75 @@ def update_todo_status():
         db.close()
 
 
+@issue_poc_bp.route("/todo/query-all", methods=["POST"])
+@require_permission("issue/todo_manage")
+def query_all_todos():
+    data = request.get_json(force=True, silent=True) or {}
+    page = data.get("page", 1)
+    page_size = data.get("pageSize", 20)
+    sort_field = data.get("sortField") or "deadline"
+    sort_order = data.get("sortOrder") or "asc"
+
+    db = SessionLocal()
+    try:
+        query_obj = db.query(IssueTodo)
+        if data.get("status"):
+            query_obj = query_obj.filter(IssueTodo.status == data["status"])
+        if data.get("staff_id"):
+            query_obj = query_obj.filter(IssueTodo.staff_id == data["staff_id"])
+        sort_columns = {"deadline": IssueTodo.deadline, "created_at": IssueTodo.created_at}
+        sort_column = sort_columns.get(sort_field, IssueTodo.deadline)
+        query_obj = query_obj.order_by(sort_column.desc() if sort_order == "desc" else sort_column.asc())
+        total = query_obj.count()
+        todos = query_obj.offset((page - 1) * page_size).limit(page_size).all()
+        result = []
+        for todo in todos:
+            item = _todo_to_dict(db, todo)
+            project = db.get(IssuePocProject, todo.project_id) if todo.project_id else None
+            item["project_code"] = project.project_code if project else ""
+            item["customer_name"] = project.customer_name if project else ""
+            result.append(item)
+        return success(data=paginate(result, page, page_size, total))
+    finally:
+        db.close()
+
+
+@issue_poc_bp.route("/todo/update", methods=["POST"])
+@require_permission("issue/todo_manage")
+def update_todo():
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        todo = db.get(IssueTodo, data.get("id"))
+        if not todo:
+            return error("待办不存在")
+        for field in ("content", "staff_id", "status"):
+            if field in data:
+                setattr(todo, field, data.get(field))
+        if "deadline" in data:
+            todo.deadline = _parse_date(data.get("deadline"))
+        db.commit()
+        return success(msg="待办更新成功")
+    finally:
+        db.close()
+
+
+@issue_poc_bp.route("/todo/delete", methods=["POST"])
+@require_permission("issue/todo_manage")
+def delete_todo():
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        todo = db.get(IssueTodo, data.get("id"))
+        if not todo:
+            return error("待办不存在")
+        db.delete(todo)
+        db.commit()
+        return success(msg="待办删除成功")
+    finally:
+        db.close()
+
+
 @issue_poc_bp.route("/comment/add", methods=["POST"])
 @require_permission("issue/bug_edit")
 def add_comment():
