@@ -66,6 +66,12 @@ export default [
         access: 'canIssue',
       },
       {
+        path: '/issue/bugs/import',
+        name: '禅道导入',
+        component: `${commonRelativeUrl}/Issue/BugImport`,
+        access: 'canIssue',
+      },
+      {
         path: '/issue/bugs/:id',
         name: '问题详情',
         hideInMenu: true,
