@@ -3,7 +3,7 @@ from datetime import datetime, time
 from flask import Blueprint, request
 
 from blueprints.auth import get_current_user
-from models import IssueBug, IssuePocProject, IssueProduct, IssueResponsibility, IssueStaff, IssueTodo
+from models import IssueBug, IssuePocProject, IssueProduct, IssueResponsibility, IssueStaff, IssueTodo, IssueType
 from utils.db import SessionLocal
 from utils.permission import require_permission
 from utils.response import success
@@ -53,6 +53,12 @@ def _bug_stat_summary(bugs):
         "active": active,
         "resolve_rate": round(resolved / total, 4) if total else 0,
     }
+
+
+def _month_label(value):
+    if not value:
+        return "未填写日期"
+    return value.strftime("%Y-%m")
 
 
 @issue_statistic_bp.route("/overview", methods=["POST"])
@@ -138,6 +144,98 @@ def by_version():
                 }
             )
         result.sort(key=lambda item: item["total"], reverse=True)
+        return success(data=result)
+    finally:
+        db.close()
+
+
+@issue_statistic_bp.route("/by-resolver", methods=["POST"])
+@require_permission("issue/stat_view")
+def by_resolver():
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        bugs = _filtered_bug_query(db, data).all()
+        staff_map = {staff.id: staff.name for staff in db.query(IssueStaff).all()}
+        grouped = {}
+        for bug in bugs:
+            key = bug.staff_id or 0
+            grouped.setdefault(key, {"bugs": [], "fallback_name": bug.resolver or "未分配"})
+            grouped[key]["bugs"].append(bug)
+
+        result = []
+        for staff_id, group in grouped.items():
+            summary = _bug_stat_summary(group["bugs"])
+            result.append(
+                {
+                    "staff_id": staff_id or None,
+                    "staff_name": staff_map.get(staff_id, group["fallback_name"]),
+                    **summary,
+                }
+            )
+        result.sort(key=lambda item: item["total"], reverse=True)
+        return success(data=result)
+    finally:
+        db.close()
+
+
+@issue_statistic_bp.route("/by-type", methods=["POST"])
+@require_permission("issue/stat_view")
+def by_type():
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        bugs = _filtered_bug_query(db, data).all()
+        type_map = {issue_type.id: issue_type.name for issue_type in db.query(IssueType).all()}
+        grouped = {}
+        for bug in bugs:
+            key = bug.issue_type_id or 0
+            grouped.setdefault(key, []).append(bug)
+
+        total = len(bugs)
+        result = []
+        for issue_type_id, items in grouped.items():
+            result.append(
+                {
+                    "issue_type_id": issue_type_id or None,
+                    "type_name": type_map.get(issue_type_id, "未分类"),
+                    "total": len(items),
+                    "ratio": round(len(items) / total, 4) if total else 0,
+                }
+            )
+        result.sort(key=lambda item: item["total"], reverse=True)
+        return success(data=result)
+    finally:
+        db.close()
+
+
+@issue_statistic_bp.route("/resolve-trend", methods=["POST"])
+@require_permission("issue/stat_view")
+def resolve_trend():
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        bugs = _filtered_bug_query(db, data).all()
+        product_map = {product.id: product.name for product in db.query(IssueProduct).all()}
+        grouped = {}
+        for bug in bugs:
+            key = (_month_label(bug.created_date), bug.product_id or 0)
+            grouped.setdefault(key, []).append(bug)
+
+        result = []
+        for (month, product_id), items in grouped.items():
+            summary = _bug_stat_summary(items)
+            result.append(
+                {
+                    "month": month,
+                    "product_id": product_id or None,
+                    "product_name": product_map.get(product_id, "未关联产品"),
+                    "total": summary["total"],
+                    "resolved": summary["resolved"],
+                    "resolve_rate": summary["resolve_rate"],
+                }
+            )
+        result.sort(key=lambda item: (item["month"], item["product_name"]))
         return success(data=result)
     finally:
         db.close()

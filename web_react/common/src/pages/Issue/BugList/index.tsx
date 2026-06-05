@@ -42,14 +42,19 @@ const statusColor = {
   重新打开: 'orange',
 };
 
-const getInitialProductId = () => {
-  const value = new URLSearchParams(window.location.search).get('product_id');
+const getQueryNumber = (key: string) => {
+  const value = new URLSearchParams(window.location.search).get(key);
   return value ? Number(value) || undefined : undefined;
 };
 
+const getQueryString = (key: string) => new URLSearchParams(window.location.search).get(key) || undefined;
+
 const BugList = () => {
   const { token } = theme.useToken();
-  const initialProductId = getInitialProductId();
+  const initialProductId = getQueryNumber('product_id');
+  const initialIssueTypeId = getQueryNumber('issue_type_id');
+  const initialStaffId = getQueryNumber('staff_id');
+  const initialAffectVersion = getQueryString('affect_version');
   const actionRef = useRef<any>();
   const [productOptions, setProductOptions] = useState<any[]>([]);
   const [issueTypeOptions, setIssueTypeOptions] = useState<any[]>([]);
@@ -81,7 +86,9 @@ const BugList = () => {
       product_id: params.product_id || initialProductId,
       severity: params.severity,
       status: params.status,
-      issue_type_id: params.issue_type_id,
+      issue_type_id: params.issue_type_id || initialIssueTypeId,
+      staff_id: params.staff_id || initialStaffId,
+      affect_version: params.affect_version || initialAffectVersion,
       ...transformSort(sort),
     };
     setQueryParams(payload);
@@ -168,15 +175,25 @@ const BugList = () => {
       title: '问题类型',
       dataIndex: 'issue_type_id',
       valueType: 'select',
+      initialValue: initialIssueTypeId,
       fieldProps: { options: issueTypeOptions, showSearch: true, optionFilterProp: 'label' },
       render: (_: any, record: any) => record.issue_type_name,
       width: 140,
     },
     {
       title: '解决人员',
-      dataIndex: 'staff_name',
-      search: false,
+      dataIndex: 'staff_id',
+      valueType: 'select',
+      initialValue: initialStaffId,
+      fieldProps: { options: staffOptions, showSearch: true, optionFilterProp: 'label' },
+      render: (_: any, record: any) => record.staff_name,
       width: 120,
+    },
+    {
+      title: '影响版本',
+      dataIndex: 'affect_version',
+      initialValue: initialAffectVersion,
+      hideInTable: true,
     },
     {
       title: '计划解决版本',

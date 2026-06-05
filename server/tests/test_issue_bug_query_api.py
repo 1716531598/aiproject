@@ -54,6 +54,7 @@ def test_bug_query_filters_sorts_paginates_and_returns_related_names(monkeypatch
                 title="登录失败",
                 severity=1,
                 status="激活",
+                affect_version="V1.0",
                 created_date=datetime(2026, 6, 1, 10, 0, 0),
             ),
             IssueBug(
@@ -81,6 +82,7 @@ def test_bug_query_filters_sorts_paginates_and_returns_related_names(monkeypatch
             "issue_type_id": issue_type_id,
             "module_id": module_id,
             "staff_id": staff_id,
+            "affect_version": "V1.0",
             "sortField": "created_date",
             "sortOrder": "desc",
         }

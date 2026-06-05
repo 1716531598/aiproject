@@ -1,10 +1,17 @@
 import { BarChartOutlined, BugOutlined, CheckCircleOutlined, FieldTimeOutlined, ProjectOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Column } from '@ant-design/plots';
+import { Column, Line, Pie } from '@ant-design/plots';
 import { history } from '@umijs/max';
 import { Button, Card, Col, DatePicker, Empty, Radio, Row, Select, Space, Statistic, Table, Tag, message } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useState } from 'react';
-import { apiStatisticByProduct, apiStatisticByVersion, apiStatisticOverview } from './service';
+import {
+  apiStatisticByProduct,
+  apiStatisticByResolver,
+  apiStatisticByType,
+  apiStatisticByVersion,
+  apiStatisticOverview,
+  apiStatisticResolveTrend,
+} from './service';
 
 const { RangePicker } = DatePicker;
 
@@ -46,6 +53,9 @@ const StatisticPage = () => {
   const [overview, setOverview] = useState<any>({});
   const [byProduct, setByProduct] = useState<any[]>([]);
   const [byVersion, setByVersion] = useState<any[]>([]);
+  const [byResolver, setByResolver] = useState<any[]>([]);
+  const [byType, setByType] = useState<any[]>([]);
+  const [resolveTrend, setResolveTrend] = useState<any[]>([]);
 
   const rangePayload = useMemo(() => resolveRange(rangeMode, customRange), [rangeMode, customRange]);
   const productOptions = useMemo(
@@ -62,14 +72,27 @@ const StatisticPage = () => {
     }
     setLoading(true);
     try {
-      const [{ data: overviewData = {} }, { data: productData = [] }, { data: versionData = [] }] = await Promise.all([
+      const [
+        { data: overviewData = {} },
+        { data: productData = [] },
+        { data: versionData = [] },
+        { data: resolverData = [] },
+        { data: typeData = [] },
+        { data: trendData = [] },
+      ] = await Promise.all([
         apiStatisticOverview(rangePayload),
         apiStatisticByProduct(rangePayload),
         apiStatisticByVersion({ ...rangePayload, product_id: productId }),
+        apiStatisticByResolver({ ...rangePayload, product_id: productId }),
+        apiStatisticByType({ ...rangePayload, product_id: productId }),
+        apiStatisticResolveTrend({ ...rangePayload, product_id: productId }),
       ]);
       setOverview(overviewData);
       setByProduct(productData);
       setByVersion(versionData);
+      setByResolver(resolverData);
+      setByType(typeData);
+      setResolveTrend(trendData);
     } catch (error: any) {
       message.error(error?.message || '统计数据加载失败');
     } finally {
@@ -138,6 +161,94 @@ const StatisticPage = () => {
     },
   };
 
+  const resolverChartConfig = {
+    data: byResolver,
+    xField: 'staff_name',
+    yField: 'total',
+    height: 280,
+    autoFit: true,
+    axis: {
+      x: { labelAutoRotate: true },
+      y: { title: '问题数' },
+    },
+    tooltip: {
+      title: 'staff_name',
+      items: [
+        { field: 'total', name: '负责总数' },
+        { field: 'resolved', name: '已解决' },
+        { field: 'active', name: '未解决' },
+      ],
+    },
+    onReady: ({ chart }: any) => {
+      chart.on('element:click', (event: any) => {
+        const item = event?.data?.data;
+        if (item?.staff_id) {
+          history.push(`/issue/bugs?staff_id=${item.staff_id}`);
+        }
+      });
+    },
+  };
+
+  const typePieConfig = {
+    data: byType,
+    angleField: 'total',
+    colorField: 'type_name',
+    height: 280,
+    autoFit: true,
+    innerRadius: 0.55,
+    label: {
+      text: 'type_name',
+      position: 'outside',
+    },
+    tooltip: {
+      title: 'type_name',
+      items: [
+        { field: 'total', name: '问题数' },
+        { field: 'ratio', name: '占比', valueFormatter: (value: number) => toPercent(value) },
+      ],
+    },
+    onReady: ({ chart }: any) => {
+      chart.on('element:click', (event: any) => {
+        const item = event?.data?.data;
+        if (item?.issue_type_id) {
+          history.push(`/issue/bugs?issue_type_id=${item.issue_type_id}`);
+        }
+      });
+    },
+  };
+
+  const trendChartConfig = {
+    data: resolveTrend.map((item) => ({
+      ...item,
+      rate_percent: Number(((item.resolve_rate || 0) * 100).toFixed(2)),
+    })),
+    xField: 'month',
+    yField: 'rate_percent',
+    colorField: 'product_name',
+    height: 320,
+    autoFit: true,
+    axis: {
+      y: { title: '解决率 %' },
+    },
+    tooltip: {
+      title: 'month',
+      items: [
+        { field: 'product_name', name: '产品' },
+        { field: 'rate_percent', name: '解决率' },
+        { field: 'total', name: '问题总数' },
+        { field: 'resolved', name: '已解决' },
+      ],
+    },
+    onReady: ({ chart }: any) => {
+      chart.on('element:click', (event: any) => {
+        const item = event?.data?.data;
+        if (item?.product_id) {
+          history.push(`/issue/bugs?product_id=${item.product_id}`);
+        }
+      });
+    },
+  };
+
   const productColumns = [
     { title: '产品', dataIndex: 'product_name' },
     { title: '问题总数', dataIndex: 'total', width: 110, sorter: (a: any, b: any) => a.total - b.total },
@@ -160,6 +271,14 @@ const StatisticPage = () => {
     { title: '产品', dataIndex: 'product_name', width: 150 },
     { title: '影响版本', dataIndex: 'version' },
     { title: '问题总数', dataIndex: 'total', width: 110, sorter: (a: any, b: any) => a.total - b.total },
+    { title: '已解决', dataIndex: 'resolved', width: 100 },
+    { title: '未解决', dataIndex: 'active', width: 100 },
+    { title: '解决率', dataIndex: 'resolve_rate', width: 100, render: (value: number) => toPercent(value) },
+  ];
+
+  const resolverColumns = [
+    { title: '责任人', dataIndex: 'staff_name' },
+    { title: '负责总数', dataIndex: 'total', width: 110, sorter: (a: any, b: any) => a.total - b.total },
     { title: '已解决', dataIndex: 'resolved', width: 100 },
     { title: '未解决', dataIndex: 'active', width: 100 },
     { title: '解决率', dataIndex: 'resolve_rate', width: 100, render: (value: number) => toPercent(value) },
@@ -246,6 +365,23 @@ const StatisticPage = () => {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
+          <Card title="责任人排名" bodyStyle={{ minHeight: 320 }}>
+            {byResolver.length ? <Column {...resolverChartConfig} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="问题类型占比" bodyStyle={{ minHeight: 320 }}>
+            {byType.length ? <Pie {...typePieConfig} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+          </Card>
+        </Col>
+      </Row>
+
+      <Card title="解决率趋势" bodyStyle={{ minHeight: 360 }}>
+        {resolveTrend.length ? <Line {...trendChartConfig} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+      </Card>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
           <Table
             rowKey={(record: any) => record.product_id || record.product_name}
             loading={loading}
@@ -266,6 +402,15 @@ const StatisticPage = () => {
           />
         </Col>
       </Row>
+
+      <Table
+        rowKey={(record: any) => record.staff_id || record.staff_name}
+        loading={loading}
+        columns={resolverColumns}
+        dataSource={byResolver}
+        pagination={false}
+        size="middle"
+      />
     </Space>
   );
 };

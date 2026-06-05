@@ -86,6 +86,8 @@ def _apply_bug_filters(query, data):
         query = query.filter(IssueBug.module_id == data["module_id"])
     if data.get("staff_id"):
         query = query.filter(IssueBug.staff_id == data["staff_id"])
+    if data.get("affect_version"):
+        query = query.filter(IssueBug.affect_version == data["affect_version"])
     return query
 
 

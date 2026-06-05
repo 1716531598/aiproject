@@ -4,7 +4,7 @@ from flask import Flask
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import IssueBug, IssuePocProject, IssueProduct
+from models import IssueBug, IssuePocProject, IssueProduct, IssueStaff, IssueType
 from utils.db import Base
 
 
@@ -29,7 +29,11 @@ def _seed_statistics_data(TestingSession):
     db = TestingSession()
     product_a = IssueProduct(name="产品A")
     product_b = IssueProduct(name="产品B")
-    db.add_all([product_a, product_b])
+    staff_a = IssueStaff(name="张三", email="zhangsan-stat@example.com")
+    staff_b = IssueStaff(name="李四", email="lisi-stat@example.com")
+    type_a = IssueType(name="功能缺陷")
+    type_b = IssueType(name="界面问题")
+    db.add_all([product_a, product_b, staff_a, staff_b, type_a, type_b])
     db.commit()
 
     db.add_all(
@@ -40,6 +44,8 @@ def _seed_statistics_data(TestingSession):
                 title="登录失败",
                 status="激活",
                 affect_version="V1.0",
+                staff_id=staff_a.id,
+                issue_type_id=type_a.id,
                 created_date=datetime(2026, 6, 1, 9, 0, 0),
             ),
             IssueBug(
@@ -48,6 +54,8 @@ def _seed_statistics_data(TestingSession):
                 title="样式异常",
                 status="已解决",
                 affect_version="V1.0",
+                staff_id=staff_a.id,
+                issue_type_id=type_b.id,
                 created_date=datetime(2026, 6, 2, 9, 0, 0),
             ),
             IssueBug(
@@ -56,6 +64,8 @@ def _seed_statistics_data(TestingSession):
                 title="历史遗留",
                 status="已关闭",
                 affect_version="",
+                staff_id=staff_b.id,
+                issue_type_id=type_a.id,
                 created_date=datetime(2026, 5, 1, 9, 0, 0),
             ),
             IssueBug(
@@ -64,6 +74,8 @@ def _seed_statistics_data(TestingSession):
                 title="安装失败",
                 status="激活",
                 affect_version="V2.0",
+                staff_id=staff_b.id,
+                issue_type_id=type_a.id,
                 created_date=datetime(2026, 6, 3, 9, 0, 0),
             ),
         ]
@@ -117,6 +129,37 @@ def test_overview_by_product_and_by_version(monkeypatch):
     assert by_version["未填写影响版本"]["total"] == 1
 
 
+def test_resolver_type_and_resolve_trend(monkeypatch):
+    issue_statistic, TestingSession = _setup_session(monkeypatch)
+    _seed_statistics_data(TestingSession)
+    app = Flask(__name__)
+    filters = {"start_date": "2026-06-01", "end_date": "2026-06-30"}
+
+    with app.test_request_context(json=filters):
+        body = _json_body(issue_statistic.by_resolver.__wrapped__())
+    assert body["code"] == 200
+    by_resolver = {item["staff_name"]: item for item in body["data"]}
+    assert by_resolver["张三"]["total"] == 2
+    assert by_resolver["张三"]["resolved"] == 1
+    assert by_resolver["李四"]["active"] == 1
+
+    with app.test_request_context(json=filters):
+        body = _json_body(issue_statistic.by_type.__wrapped__())
+    assert body["code"] == 200
+    by_type = {item["type_name"]: item for item in body["data"]}
+    assert by_type["功能缺陷"]["total"] == 2
+    assert by_type["功能缺陷"]["ratio"] == 0.6667
+    assert by_type["界面问题"]["total"] == 1
+
+    with app.test_request_context(json=filters):
+        body = _json_body(issue_statistic.resolve_trend.__wrapped__())
+    assert body["code"] == 200
+    trend = {(item["month"], item["product_name"]): item for item in body["data"]}
+    assert trend[("2026-06", "产品A")]["total"] == 2
+    assert trend[("2026-06", "产品A")]["resolve_rate"] == 0.5
+    assert trend[("2026-06", "产品B")]["total"] == 1
+
+
 def test_issue_statistics_routes_are_registered(monkeypatch):
     import app as app_module
 
@@ -128,3 +171,6 @@ def test_issue_statistics_routes_are_registered(monkeypatch):
     assert "/api/issue/statistics/overview" in rules
     assert "/api/issue/statistics/by-product" in rules
     assert "/api/issue/statistics/by-version" in rules
+    assert "/api/issue/statistics/by-resolver" in rules
+    assert "/api/issue/statistics/by-type" in rules
+    assert "/api/issue/statistics/resolve-trend" in rules
