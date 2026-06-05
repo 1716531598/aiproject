@@ -13,6 +13,7 @@ from models import IssueAssessment, IssueBug, IssueProduct, IssueSyncLog, IssueT
 from utils.db import SessionLocal
 from utils.issue_import import import_zentao_csv
 from utils.permission import require_permission
+from utils.redis_client import get_redis
 from utils.response import error, paginate, success
 
 issue_admin_bp = Blueprint("issue_admin", __name__, url_prefix="/api/issue/admin")
@@ -353,6 +354,69 @@ def _append_email_log(entry):
     logs = _load_json(EMAIL_LOG_PATH, [])
     logs.insert(0, entry)
     _save_json(EMAIL_LOG_PATH, logs[:200])
+
+
+def send_notification(to_email: str, subject: str, body: str, config: dict):
+    if not to_email or not config.get("smtp_host") or not config.get("smtp_sender"):
+        return False
+    msg = MIMEText(body, "html", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = config["smtp_sender"]
+    msg["To"] = to_email
+    with smtplib.SMTP(config["smtp_host"], int(config.get("smtp_port") or 587)) as server:
+        if config.get("smtp_password"):
+            server.starttls()
+            server.login(config["smtp_sender"], config["smtp_password"])
+        server.send_message(msg)
+    return True
+
+
+def _notify_enabled(event_type, config):
+    mapping = {
+        "bug_new": "notify_bug_new",
+        "bug_reopen": "notify_bug_reopen",
+        "responsibility": "notify_responsibility",
+        "todo": "notify_todo",
+    }
+    return bool(config.get(mapping.get(event_type, ""), True))
+
+
+def notify_with_dedup(event_type: str, target_id: str, to_email: str, subject: str, body: str):
+    config = _load_json(EMAIL_CONFIG_PATH, DEFAULT_EMAIL_CONFIG)
+    if not _notify_enabled(event_type, config):
+        return False
+    if not to_email or not config.get("smtp_host") or not config.get("smtp_sender"):
+        return False
+    key = f"notify:{event_type}:{target_id}"
+    try:
+        redis_client = get_redis()
+        if redis_client.get(key):
+            return False
+        sent = send_notification(to_email, subject, body, config)
+        if sent:
+            redis_client.setex(key, 300, "1")
+    except Exception as exc:
+        _append_email_log(
+            {
+                "to_email": to_email,
+                "subject": subject,
+                "status": "失败",
+                "error": str(exc),
+                "created_at": datetime.now().isoformat(),
+            }
+        )
+        return False
+    if sent:
+        _append_email_log(
+            {
+                "to_email": to_email,
+                "subject": subject,
+                "status": "成功",
+                "error": "",
+                "created_at": datetime.now().isoformat(),
+            }
+        )
+    return sent
 
 
 @issue_admin_bp.route("/email/test", methods=["POST"])

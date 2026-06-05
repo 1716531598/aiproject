@@ -170,6 +170,8 @@ def import_zentao_csv(db, file_bytes):
     rows = parse_zentao_csv(file_bytes)
     new_count = 0
     update_count = 0
+    new_bug_ids = []
+    updated_bug_ids = []
     failed = []
     parse_failed = []
 
@@ -202,11 +204,13 @@ def import_zentao_csv(db, file_bytes):
         if bug:
             _apply_bug_fields(bug, row, mapping.product_id)
             update_count += 1
+            updated_bug_ids.append(row["bug_id"])
         else:
             bug = IssueBug(bug_id=row["bug_id"])
             _apply_bug_fields(bug, row, mapping.product_id)
             db.add(bug)
             new_count += 1
+            new_bug_ids.append(row["bug_id"])
 
     fail_count = len(failed) + len(parse_failed)
     if fail_count and (new_count or update_count):
@@ -222,6 +226,8 @@ def import_zentao_csv(db, file_bytes):
         "fail_count": fail_count,
         "failed": failed,
         "parse_failed": parse_failed,
+        "new_bug_ids": new_bug_ids,
+        "updated_bug_ids": updated_bug_ids,
     }
     db.add(
         IssueSyncLog(

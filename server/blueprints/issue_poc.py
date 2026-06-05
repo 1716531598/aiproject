@@ -4,6 +4,7 @@ from datetime import date
 from flask import Blueprint, request
 
 from blueprints.auth import get_current_user
+from blueprints.issue_admin import notify_with_dedup
 from models import (
     IssueBug,
     IssueBugComment,
@@ -251,17 +252,19 @@ def add_todo():
         return error("请填写待办内容和责任人")
     db = SessionLocal()
     try:
-        db.add(
-            IssueTodo(
-                project_id=data.get("project_id"),
-                content=data["content"],
-                staff_id=data["staff_id"],
-                deadline=_parse_date(data.get("deadline")),
-                status="待处理",
-                creator_id=session.get("id") or session.get("userid"),
-            )
+        todo = IssueTodo(
+            project_id=data.get("project_id"),
+            content=data["content"],
+            staff_id=data["staff_id"],
+            deadline=_parse_date(data.get("deadline")),
+            status="待处理",
+            creator_id=session.get("id") or session.get("userid"),
         )
+        db.add(todo)
         db.commit()
+        staff = db.get(IssueStaff, todo.staff_id)
+        if staff and staff.email:
+            notify_with_dedup("todo", str(todo.id), staff.email, "TODO 待办通知", todo.content)
         return success(msg="待办任务创建成功")
     finally:
         db.close()

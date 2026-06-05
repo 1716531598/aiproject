@@ -4,6 +4,7 @@ from urllib.parse import quote
 from flask import Blueprint, Response, request
 
 from blueprints.auth import get_current_user
+from blueprints.issue_admin import notify_with_dedup
 from models import (
     IssueBug,
     IssueBugComment,
@@ -101,6 +102,23 @@ def _apply_bug_sort(query, sort_field, sort_order):
     }
     sort_column = sort_columns.get(sort_field, IssueBug.created_date)
     return query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
+
+
+def _notify_imported_bugs(db, result):
+    bug_ids = set(result.get("new_bug_ids", [])) | set(result.get("updated_bug_ids", []))
+    if not bug_ids:
+        return
+    bugs = db.query(IssueBug).filter(IssueBug.bug_id.in_(bug_ids)).all()
+    for bug in bugs:
+        if not bug.resolver:
+            continue
+        staff = db.query(IssueStaff).filter(IssueStaff.name == bug.resolver).first()
+        if not staff or not staff.email:
+            continue
+        if bug.bug_id in result.get("new_bug_ids", []):
+            notify_with_dedup("bug_new", bug.bug_id, staff.email, f"新问题待处理：{bug.bug_id}", bug.title)
+        if bug.status == "重新打开":
+            notify_with_dedup("bug_reopen", bug.bug_id, staff.email, f"问题重新打开：{bug.bug_id}", bug.title)
 
 
 @issue_bug_bp.route("/query", methods=["POST"])
@@ -329,6 +347,7 @@ def import_bugs():
     try:
         result = import_zentao_csv(db, upload.read())
         db.commit()
+        _notify_imported_bugs(db, result)
         return success(data=result, msg="导入完成")
     except ValueError as exc:
         db.rollback()

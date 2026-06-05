@@ -7,6 +7,7 @@ from flask import Blueprint, Response, request
 from openpyxl.styles import Font
 
 from blueprints.auth import get_current_user
+from blueprints.issue_admin import notify_with_dedup
 from models import IssueAssessment, IssueBug, IssueProduct, IssueResponsibility, IssueStaff, IssueVersion
 from utils.db import SessionLocal
 from utils.permission import require_permission
@@ -130,6 +131,17 @@ def resp_save():
                 )
             )
         db.commit()
+        bug = db.get(IssueBug, bug_id)
+        for record in records:
+            staff = db.get(IssueStaff, record.get("staff_id"))
+            if staff and staff.email and bug:
+                notify_with_dedup(
+                    "responsibility",
+                    f"{bug.bug_id}:{staff.id}",
+                    staff.email,
+                    f"责任分配通知：{bug.bug_id}",
+                    bug.title,
+                )
         return success(msg="责任分配保存成功")
     finally:
         db.close()

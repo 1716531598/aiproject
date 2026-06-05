@@ -196,6 +196,61 @@ def test_email_config_and_test_mail_log(monkeypatch, tmp_path):
         assert body["data"][0]["status"] == "成功"
 
 
+def test_notify_with_dedup(monkeypatch, tmp_path):
+    issue_admin, _ = _setup_session(monkeypatch)
+    config_path = tmp_path / "email-config.json"
+    log_path = tmp_path / "email-logs.json"
+    monkeypatch.setattr(issue_admin, "EMAIL_CONFIG_PATH", config_path)
+    monkeypatch.setattr(issue_admin, "EMAIL_LOG_PATH", log_path)
+    issue_admin._save_json(
+        config_path,
+        {
+            **issue_admin.DEFAULT_EMAIL_CONFIG,
+            "smtp_host": "smtp.example.com",
+            "smtp_sender": "noreply@example.com",
+            "smtp_password": "",
+        },
+    )
+
+    sent_messages = []
+
+    class DummySMTP:
+        def __init__(self, host, port):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def send_message(self, message):
+            sent_messages.append(message)
+
+    class DummyRedis:
+        def __init__(self):
+            self.values = {}
+
+        def get(self, key):
+            return self.values.get(key)
+
+        def setex(self, key, seconds, value):
+            self.values[key] = value
+
+    redis_client = DummyRedis()
+    monkeypatch.setattr(issue_admin.smtplib, "SMTP", DummySMTP)
+    monkeypatch.setattr(issue_admin, "get_redis", lambda: redis_client)
+
+    first = issue_admin.notify_with_dedup("todo", "1", "user@example.com", "待办通知", "请处理")
+    second = issue_admin.notify_with_dedup("todo", "1", "user@example.com", "待办通知", "请处理")
+
+    assert first is True
+    assert second is False
+    assert len(sent_messages) == 1
+    logs = issue_admin._load_json(log_path, [])
+    assert logs[0]["status"] == "成功"
+
+
 def test_sync_config_test_and_trigger(monkeypatch, tmp_path):
     issue_admin, TestingSession = _setup_session(monkeypatch)
     sync_config_path = tmp_path / "sync-config.json"
