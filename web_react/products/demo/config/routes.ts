@@ -110,6 +110,12 @@ export default [
         access: 'canIssue',
       },
       {
+        path: '/issue/overdue',
+        name: '超期分析',
+        component: `${commonRelativeUrl}/Issue/Overdue`,
+        access: 'canIssue',
+      },
+      {
         path: '/issue/admin',
         name: '系统管理',
         routes: [

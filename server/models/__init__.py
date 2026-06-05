@@ -19,6 +19,7 @@ from models.issue_poc_progress import IssuePocProgress
 from models.issue_poc_comment import IssuePocComment
 from models.issue_todo import IssueTodo
 from models.issue_sync_log import IssueSyncLog
+from models.issue_overdue_analysis import IssueOverdueAnalysis
 
 __all__ = [
     "User", "Role", "Permission", "RolePermission", "AuditLog",
@@ -26,5 +27,5 @@ __all__ = [
     "IssueStaff", "IssueType", "IssueBug", "IssueBugComment",
     "IssueBugHistory", "IssueResponsibility", "IssueAssessment",
     "IssuePocProject", "IssuePocProgress", "IssuePocComment",
-    "IssueTodo", "IssueSyncLog",
+    "IssueTodo", "IssueSyncLog", "IssueOverdueAnalysis",
 ]

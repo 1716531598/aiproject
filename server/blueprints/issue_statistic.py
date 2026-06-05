@@ -1,12 +1,25 @@
 from datetime import datetime, time
+from io import BytesIO
+from urllib.parse import quote
 
-from flask import Blueprint, request
+import openpyxl
+from flask import Blueprint, Response, request
+from openpyxl.styles import Font
 
 from blueprints.auth import get_current_user
-from models import IssueBug, IssuePocProject, IssueProduct, IssueResponsibility, IssueStaff, IssueTodo, IssueType
+from models import (
+    IssueBug,
+    IssueOverdueAnalysis,
+    IssuePocProject,
+    IssueProduct,
+    IssueResponsibility,
+    IssueStaff,
+    IssueTodo,
+    IssueType,
+)
 from utils.db import SessionLocal
 from utils.permission import require_permission
-from utils.response import success
+from utils.response import error, success
 
 issue_statistic_bp = Blueprint("issue_statistic", __name__, url_prefix="/api/issue/statistics")
 
@@ -59,6 +72,70 @@ def _month_label(value):
     if not value:
         return "未填写日期"
     return value.strftime("%Y-%m")
+
+
+def _bug_age_days(bug):
+    if not bug.created_date:
+        return 0
+    now = datetime.now(bug.created_date.tzinfo) if bug.created_date.tzinfo else datetime.now()
+    return max((now - bug.created_date).days, 0)
+
+
+def _overdue_rows(db):
+    product_map = {product.id: product.name for product in db.query(IssueProduct).all()}
+    analysis_map = {
+        (item.product_id, item.version): item
+        for item in db.query(IssueOverdueAnalysis).all()
+    }
+    groups = {}
+    active_bugs = db.query(IssueBug).filter(IssueBug.status == ACTIVE_STATUS).all()
+    for bug in active_bugs:
+        version = (bug.affect_version or "").strip()
+        if not bug.product_id or not version:
+            continue
+        days = _bug_age_days(bug)
+        if days < 30:
+            continue
+        key = (bug.product_id, version)
+        groups.setdefault(
+            key,
+            {
+                "product_id": bug.product_id,
+                "product_name": product_map.get(bug.product_id, ""),
+                "version": version,
+                "overdue_total": 0,
+                "overdue_180": 0,
+                "overdue_360": 0,
+                "bugs": [],
+            },
+        )
+        groups[key]["overdue_total"] += 1
+        if days >= 180:
+            groups[key]["overdue_180"] += 1
+        if days >= 360:
+            groups[key]["overdue_360"] += 1
+        groups[key]["bugs"].append(
+            {
+                "id": bug.id,
+                "bug_id": bug.bug_id,
+                "title": bug.title,
+                "severity": bug.severity,
+                "status": bug.status,
+                "created_date": bug.created_date.isoformat() if bug.created_date else None,
+                "overdue_days": days,
+            }
+        )
+
+    result = []
+    for key, row in groups.items():
+        analysis = analysis_map.get(key)
+        row["analysis"] = analysis.analysis if analysis else ""
+        row["improvement"] = analysis.improvement if analysis else ""
+        row["analysis_id"] = analysis.id if analysis else None
+        row["bugs"].sort(key=lambda item: item["overdue_days"], reverse=True)
+        result.append(row)
+    result.sort(key=lambda item: item["overdue_total"], reverse=True)
+    return result
 
 
 @issue_statistic_bp.route("/overview", methods=["POST"])
@@ -239,6 +316,85 @@ def resolve_trend():
         return success(data=result)
     finally:
         db.close()
+
+
+@issue_statistic_bp.route("/overdue", methods=["POST"])
+@require_permission("issue/stat_view")
+def overdue():
+    db = SessionLocal()
+    try:
+        return success(data=_overdue_rows(db))
+    finally:
+        db.close()
+
+
+@issue_statistic_bp.route("/overdue/analysis", methods=["POST"])
+@require_permission("issue/stat_view")
+def overdue_analysis():
+    data = request.get_json(force=True, silent=True) or {}
+    product_id = data.get("product_id")
+    version = (data.get("version") or "").strip()
+    if not product_id or not version:
+        return error("缺少产品或版本")
+
+    should_save = "analysis" in data or "improvement" in data
+    db = SessionLocal()
+    try:
+        record = (
+            db.query(IssueOverdueAnalysis)
+            .filter(IssueOverdueAnalysis.product_id == product_id, IssueOverdueAnalysis.version == version)
+            .first()
+        )
+        if should_save:
+            if not record:
+                record = IssueOverdueAnalysis(product_id=product_id, version=version)
+                db.add(record)
+            record.analysis = data.get("analysis", record.analysis) or ""
+            record.improvement = data.get("improvement", record.improvement) or ""
+            db.commit()
+            db.refresh(record)
+        return success(data=record.to_dict() if record else None, msg="保存成功" if should_save else "")
+    finally:
+        db.close()
+
+
+@issue_statistic_bp.route("/overdue/export", methods=["POST"])
+@require_permission("issue/stat_export")
+def overdue_export():
+    db = SessionLocal()
+    try:
+        rows = _overdue_rows(db)
+    finally:
+        db.close()
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "超期问题"
+    headers = ["产品", "版本", "超期问题总数", "超期180天", "超期360天", "问题分析", "改进措施"]
+    for index, header in enumerate(headers, 1):
+        cell = sheet.cell(row=1, column=index, value=header)
+        cell.font = Font(bold=True)
+    for row_index, row in enumerate(rows, 2):
+        values = [
+            row["product_name"],
+            row["version"],
+            row["overdue_total"],
+            row["overdue_180"],
+            row["overdue_360"],
+            row["analysis"],
+            row["improvement"],
+        ]
+        for column_index, value in enumerate(values, 1):
+            sheet.cell(row=row_index, column=column_index, value=value)
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    filename = "超期问题汇总.xlsx"
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @issue_statistic_bp.route("/my-summary", methods=["POST"])
