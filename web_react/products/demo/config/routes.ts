@@ -91,6 +91,13 @@ export default [
         access: 'canIssue',
       },
       {
+        path: '/issue/poc/:id',
+        name: 'PoC 详情',
+        hideInMenu: true,
+        component: `${commonRelativeUrl}/Issue/PocList/Detail`,
+        access: 'canIssue',
+      },
+      {
         path: '/issue/statistic',
         name: '统计分析',
         component: `${commonRelativeUrl}/Issue/Statistic`,
