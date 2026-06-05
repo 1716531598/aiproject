@@ -1,13 +1,17 @@
+import csv
 import json
 import smtplib
 from datetime import datetime
 from email.mime.text import MIMEText
+from io import StringIO
 from pathlib import Path
+from urllib import request as urlrequest
 
 from flask import Blueprint, request
 
 from models import IssueAssessment, IssueBug, IssueProduct, IssueSyncLog, IssueType, IssueVersion
 from utils.db import SessionLocal
+from utils.issue_import import import_zentao_csv
 from utils.permission import require_permission
 from utils.response import error, paginate, success
 
@@ -16,6 +20,7 @@ issue_admin_bp = Blueprint("issue_admin", __name__, url_prefix="/api/issue/admin
 SERVER_DIR = Path(__file__).resolve().parents[1]
 EMAIL_CONFIG_PATH = SERVER_DIR / "issue_email_config.json"
 EMAIL_LOG_PATH = SERVER_DIR / "issue_email_logs.json"
+SYNC_CONFIG_PATH = SERVER_DIR / "issue_sync_config.json"
 
 DEFAULT_EMAIL_CONFIG = {
     "smtp_host": "",
@@ -26,6 +31,13 @@ DEFAULT_EMAIL_CONFIG = {
     "notify_responsibility": True,
     "notify_todo": True,
     "notify_bug_reopen": True,
+}
+
+DEFAULT_SYNC_CONFIG = {
+    "zentao_url": "",
+    "zentao_token": "",
+    "auto_sync_enabled": False,
+    "sync_interval_minutes": 60,
 }
 
 
@@ -39,6 +51,75 @@ def _load_json(path, default):
 def _save_json(path, data):
     with path.open("w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _safe_sync_config(config):
+    safe_config = config.copy()
+    if safe_config.get("zentao_token"):
+        safe_config["zentao_token"] = "******"
+    return safe_config
+
+
+def _zentao_request_json(config, path):
+    base_url = (config.get("zentao_url") or "").rstrip("/")
+    if not base_url:
+        raise ValueError("请先配置禅道地址")
+    token = config.get("zentao_token") or ""
+    req = urlrequest.Request(f"{base_url}{path}")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+        req.add_header("Token", token)
+    with urlrequest.urlopen(req, timeout=15) as response:
+        body = response.read().decode("utf-8")
+    return json.loads(body) if body else {}
+
+
+def _zentao_bugs_to_csv_bytes(payload):
+    bugs = payload.get("bugs") or payload.get("data") or payload.get("items") or []
+    if isinstance(bugs, dict):
+        bugs = bugs.get("bugs") or bugs.get("data") or []
+    output = StringIO()
+    headers = [
+        "Bug 编号",
+        "Bug 标题",
+        "产品",
+        "严重程度",
+        "状态",
+        "解决者",
+        "解决方案",
+        "是否确认",
+        "重现步骤",
+        "创建日期",
+        "解决日期",
+        "由谁创建",
+        "关键词",
+    ]
+    writer = csv.DictWriter(output, fieldnames=headers)
+    writer.writeheader()
+    for bug in bugs:
+        writer.writerow(
+            {
+                "Bug 编号": bug.get("bug_id") or bug.get("id") or bug.get("code") or "",
+                "Bug 标题": bug.get("title") or bug.get("name") or "",
+                "产品": bug.get("product_name") or bug.get("product") or "",
+                "严重程度": bug.get("severity") or bug.get("pri") or "",
+                "状态": bug.get("status") or "",
+                "解决者": bug.get("resolver") or bug.get("resolvedBy") or "",
+                "解决方案": bug.get("resolution") or "",
+                "是否确认": bug.get("confirmed") or "",
+                "重现步骤": bug.get("steps") or bug.get("repro_steps") or "",
+                "创建日期": bug.get("created_date") or bug.get("openedDate") or "",
+                "解决日期": bug.get("resolved_date") or bug.get("resolvedDate") or "",
+                "由谁创建": bug.get("created_by") or bug.get("openedBy") or "",
+                "关键词": bug.get("keywords") or "",
+            }
+        )
+    return output.getvalue().encode("utf-8-sig")
+
+
+def _fetch_zentao_csv(config):
+    payload = _zentao_request_json(config, "/api.php/v1/bugs")
+    return _zentao_bugs_to_csv_bytes(payload)
 
 
 def _type_to_dict(issue_type):
@@ -324,6 +405,67 @@ def email_test():
 @require_permission("issue/product_manage")
 def email_logs():
     return success(data=_load_json(EMAIL_LOG_PATH, []))
+
+
+@issue_admin_bp.route("/sync/config", methods=["GET", "POST"])
+@require_permission("issue/bug_import")
+def sync_config():
+    if request.method == "GET":
+        return success(data=_safe_sync_config(_load_json(SYNC_CONFIG_PATH, DEFAULT_SYNC_CONFIG)))
+
+    data = request.get_json(force=True, silent=True) or {}
+    current_config = _load_json(SYNC_CONFIG_PATH, DEFAULT_SYNC_CONFIG)
+    config = DEFAULT_SYNC_CONFIG.copy()
+    config.update({key: data.get(key, config[key]) for key in config})
+    if data.get("zentao_token") in ("", None, "******"):
+        config["zentao_token"] = current_config.get("zentao_token", "")
+    try:
+        config["sync_interval_minutes"] = int(config.get("sync_interval_minutes") or 60)
+    except ValueError:
+        return error("同步间隔必须为数字")
+    _save_json(SYNC_CONFIG_PATH, config)
+    return success(data=_safe_sync_config(config), msg="保存成功")
+
+
+@issue_admin_bp.route("/sync/test", methods=["POST"])
+@require_permission("issue/bug_import")
+def sync_test():
+    data = request.get_json(force=True, silent=True) or {}
+    config = _load_json(SYNC_CONFIG_PATH, DEFAULT_SYNC_CONFIG)
+    config.update({key: value for key, value in data.items() if value not in ("", None, "******")})
+    try:
+        payload = _zentao_request_json(config, "/api.php/v1/tokens")
+        return success(data={"connected": True, "response": payload}, msg="连接成功")
+    except Exception as exc:
+        return error(f"连接失败: {exc}")
+
+
+@issue_admin_bp.route("/sync/trigger", methods=["POST"])
+@require_permission("issue/bug_import")
+def sync_trigger():
+    config = _load_json(SYNC_CONFIG_PATH, DEFAULT_SYNC_CONFIG)
+    db = SessionLocal()
+    try:
+        csv_bytes = _fetch_zentao_csv(config)
+        result = import_zentao_csv(db, csv_bytes)
+        db.commit()
+        return success(data=result, msg="同步完成")
+    except Exception as exc:
+        db.rollback()
+        db.add(
+            IssueSyncLog(
+                trigger_type="手动",
+                new_count=0,
+                update_count=0,
+                fail_count=1,
+                status="失败",
+                error_detail=str(exc),
+            )
+        )
+        db.commit()
+        return error(f"同步失败: {exc}")
+    finally:
+        db.close()
 
 
 @issue_admin_bp.route("/sync-logs/query", methods=["POST"])

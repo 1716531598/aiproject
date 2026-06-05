@@ -4,7 +4,7 @@ from flask import Flask
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from models import IssueAssessment, IssueBug, IssueProduct, IssueSyncLog, IssueType, IssueVersion
+from models import IssueAssessment, IssueBug, IssueProduct, IssueProductMapping, IssueSyncLog, IssueType, IssueVersion
 from utils.db import Base
 
 
@@ -196,6 +196,63 @@ def test_email_config_and_test_mail_log(monkeypatch, tmp_path):
         assert body["data"][0]["status"] == "成功"
 
 
+def test_sync_config_test_and_trigger(monkeypatch, tmp_path):
+    issue_admin, TestingSession = _setup_session(monkeypatch)
+    sync_config_path = tmp_path / "sync-config.json"
+    monkeypatch.setattr(issue_admin, "SYNC_CONFIG_PATH", sync_config_path)
+    monkeypatch.setattr(issue_admin, "_zentao_request_json", lambda config, path: {"ok": True, "path": path})
+
+    app = Flask(__name__)
+    payload = {
+        "zentao_url": "https://zentao.example.com",
+        "zentao_token": "secret-token",
+        "auto_sync_enabled": True,
+        "sync_interval_minutes": 30,
+    }
+    with app.test_request_context(method="POST", json=payload):
+        body = _json_body(issue_admin.sync_config.__wrapped__())
+    assert body["code"] == 200
+    assert body["data"]["zentao_token"] == "******"
+
+    with app.test_request_context():
+        body = _json_body(issue_admin.sync_config.__wrapped__())
+    assert body["code"] == 200
+    assert body["data"]["zentao_token"] == "******"
+
+    saved_config = issue_admin._load_json(sync_config_path, {})
+    assert saved_config["zentao_token"] == "secret-token"
+
+    with app.test_request_context(method="POST", json={}):
+        body = _json_body(issue_admin.sync_test.__wrapped__())
+    assert body["code"] == 200
+    assert body["data"]["connected"] is True
+    assert body["data"]["response"]["path"] == "/api.php/v1/tokens"
+
+    db = TestingSession()
+    product = IssueProduct(name="产品A")
+    db.add(product)
+    db.commit()
+    db.add(IssueProductMapping(product_id=product.id, source_type="zentao", source_name="禅道产品A"))
+    db.commit()
+    db.close()
+
+    csv_content = (
+        "Bug 编号,Bug 标题,产品,严重程度,状态,解决者,解决方案,是否确认,重现步骤,创建日期,解决日期,由谁创建,关键词\n"
+        "BUG-SYNC-1,同步问题,禅道产品A,P1,激活,,,,2026-06-01,,张三,售后\n"
+    )
+    monkeypatch.setattr(issue_admin, "_fetch_zentao_csv", lambda config: csv_content.encode("utf-8-sig"))
+
+    with app.test_request_context(method="POST", json={}):
+        body = _json_body(issue_admin.sync_trigger.__wrapped__())
+    assert body["code"] == 200
+    assert body["data"]["new_count"] == 1
+
+    db = TestingSession()
+    assert db.query(IssueBug).filter(IssueBug.bug_id == "BUG-SYNC-1").count() == 1
+    assert db.query(IssueSyncLog).count() == 1
+    db.close()
+
+
 def test_sync_log_query_filters_status(monkeypatch):
     issue_admin, TestingSession = _setup_session(monkeypatch)
 
@@ -228,4 +285,7 @@ def test_issue_admin_routes_are_registered(monkeypatch):
     assert "/api/issue/admin/email/config" in rules
     assert "/api/issue/admin/email/test" in rules
     assert "/api/issue/admin/email/logs" in rules
+    assert "/api/issue/admin/sync/config" in rules
+    assert "/api/issue/admin/sync/test" in rules
+    assert "/api/issue/admin/sync/trigger" in rules
     assert "/api/issue/admin/sync-logs/query" in rules
