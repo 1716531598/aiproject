@@ -1,5 +1,7 @@
 from datetime import datetime
+from io import BytesIO
 
+import openpyxl
 from flask import Flask
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -129,6 +131,24 @@ def test_overview_by_product_and_by_version(monkeypatch):
     assert by_version["未填写影响版本"]["total"] == 1
 
 
+def test_statistics_export(monkeypatch):
+    issue_statistic, TestingSession = _setup_session(monkeypatch)
+    _seed_statistics_data(TestingSession)
+    app = Flask(__name__)
+
+    with app.test_request_context(json={"start_date": "2026-06-01", "end_date": "2026-06-30"}):
+        response = issue_statistic.stat_export.__wrapped__()
+
+    workbook = openpyxl.load_workbook(BytesIO(response.get_data()))
+    assert workbook.sheetnames == ["统计总览", "按产品", "按版本"]
+    overview_sheet = workbook["统计总览"]
+    assert overview_sheet.cell(row=1, column=1).value == "指标"
+    assert overview_sheet.cell(row=2, column=2).value == 3
+    product_sheet = workbook["按产品"]
+    assert product_sheet.cell(row=1, column=1).value == "产品"
+    assert product_sheet.cell(row=2, column=2).value == 2
+
+
 def test_resolver_type_and_resolve_trend(monkeypatch):
     issue_statistic, TestingSession = _setup_session(monkeypatch)
     _seed_statistics_data(TestingSession)
@@ -171,6 +191,7 @@ def test_issue_statistics_routes_are_registered(monkeypatch):
     assert "/api/issue/statistics/overview" in rules
     assert "/api/issue/statistics/by-product" in rules
     assert "/api/issue/statistics/by-version" in rules
+    assert "/api/issue/statistics/export" in rules
     assert "/api/issue/statistics/by-resolver" in rules
     assert "/api/issue/statistics/by-type" in rules
     assert "/api/issue/statistics/resolve-trend" in rules

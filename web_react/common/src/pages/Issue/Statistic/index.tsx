@@ -1,4 +1,4 @@
-import { BarChartOutlined, BugOutlined, CheckCircleOutlined, FieldTimeOutlined, ProjectOutlined, ReloadOutlined } from '@ant-design/icons';
+import { BarChartOutlined, BugOutlined, CheckCircleOutlined, DownloadOutlined, FieldTimeOutlined, ProjectOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Column, Line, Pie } from '@ant-design/plots';
 import { history } from '@umijs/max';
 import { Button, Card, Col, DatePicker, Empty, Radio, Row, Select, Space, Statistic, Table, Tag, message } from 'antd';
@@ -9,6 +9,7 @@ import {
   apiStatisticByResolver,
   apiStatisticByType,
   apiStatisticByVersion,
+  apiStatisticExport,
   apiStatisticOverview,
   apiStatisticResolveTrend,
 } from './service';
@@ -50,6 +51,7 @@ const StatisticPage = () => {
   const [customRange, setCustomRange] = useState<any[]>([]);
   const [productId, setProductId] = useState<number>();
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [overview, setOverview] = useState<any>({});
   const [byProduct, setByProduct] = useState<any[]>([]);
   const [byVersion, setByVersion] = useState<any[]>([]);
@@ -103,6 +105,26 @@ const StatisticPage = () => {
   useEffect(() => {
     loadData();
   }, [rangePayload.start_date, rangePayload.end_date, productId]);
+
+  const downloadExport = async () => {
+    setExporting(true);
+    try {
+      const { blob, filename } = await apiStatisticExport({ ...rangePayload, product_id: productId });
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      document.body.appendChild(link);
+      link.style.display = 'none';
+      link.href = blobUrl;
+      link.download = filename;
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+      message.error(error?.message || '导出失败');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const productChartConfig = {
     data: byProduct,
@@ -308,6 +330,9 @@ const StatisticPage = () => {
           />
           <Button icon={<ReloadOutlined />} loading={loading} onClick={loadData}>
             刷新
+          </Button>
+          <Button icon={<DownloadOutlined />} loading={exporting} onClick={downloadExport}>
+            导出报表
           </Button>
         </Space>
       </Card>

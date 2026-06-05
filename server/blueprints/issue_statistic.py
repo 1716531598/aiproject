@@ -138,30 +138,78 @@ def _overdue_rows(db):
     return result
 
 
+def _overview_data(db, data):
+    bug_summary = _bug_stat_summary(_filtered_bug_query(db, data).all())
+    poc_total = db.query(IssuePocProject).count()
+    poc_closed = (
+        db.query(IssuePocProject)
+        .filter(IssuePocProject.current_status.like("%完成%"))
+        .count()
+    )
+    return {
+        "bug_total": bug_summary["total"],
+        "bug_resolved": bug_summary["resolved"],
+        "bug_active": bug_summary["active"],
+        "resolve_rate": bug_summary["resolve_rate"],
+        "poc_total": poc_total,
+        "poc_closed": poc_closed,
+        "poc_active": poc_total - poc_closed,
+    }
+
+
+def _by_product_rows(db, data):
+    bugs = _filtered_bug_query(db, data).all()
+    product_map = {product.id: product.name for product in db.query(IssueProduct).all()}
+    grouped = {}
+    for bug in bugs:
+        key = bug.product_id or 0
+        grouped.setdefault(key, []).append(bug)
+
+    result = []
+    for product_id, items in grouped.items():
+        summary = _bug_stat_summary(items)
+        result.append(
+            {
+                "product_id": product_id or None,
+                "product_name": product_map.get(product_id, "未关联产品"),
+                **summary,
+            }
+        )
+    result.sort(key=lambda item: item["total"], reverse=True)
+    return result
+
+
+def _by_version_rows(db, data):
+    bugs = _filtered_bug_query(db, data).all()
+    product_map = {product.id: product.name for product in db.query(IssueProduct).all()}
+    grouped = {}
+    for bug in bugs:
+        version = (bug.affect_version or "").strip() or BLANK_VERSION_LABEL
+        key = (bug.product_id or 0, version)
+        grouped.setdefault(key, []).append(bug)
+
+    result = []
+    for (product_id, version), items in grouped.items():
+        summary = _bug_stat_summary(items)
+        result.append(
+            {
+                "product_id": product_id or None,
+                "product_name": product_map.get(product_id, "未关联产品"),
+                "version": version,
+                **summary,
+            }
+        )
+    result.sort(key=lambda item: item["total"], reverse=True)
+    return result
+
+
 @issue_statistic_bp.route("/overview", methods=["POST"])
 @require_permission("issue/stat_view")
 def overview():
     data = request.get_json(force=True, silent=True) or {}
     db = SessionLocal()
     try:
-        bug_summary = _bug_stat_summary(_filtered_bug_query(db, data).all())
-        poc_total = db.query(IssuePocProject).count()
-        poc_closed = (
-            db.query(IssuePocProject)
-            .filter(IssuePocProject.current_status.like("%完成%"))
-            .count()
-        )
-        return success(
-            data={
-                "bug_total": bug_summary["total"],
-                "bug_resolved": bug_summary["resolved"],
-                "bug_active": bug_summary["active"],
-                "resolve_rate": bug_summary["resolve_rate"],
-                "poc_total": poc_total,
-                "poc_closed": poc_closed,
-                "poc_active": poc_total - poc_closed,
-            }
-        )
+        return success(data=_overview_data(db, data))
     finally:
         db.close()
 
@@ -172,25 +220,7 @@ def by_product():
     data = request.get_json(force=True, silent=True) or {}
     db = SessionLocal()
     try:
-        bugs = _filtered_bug_query(db, data).all()
-        product_map = {product.id: product.name for product in db.query(IssueProduct).all()}
-        grouped = {}
-        for bug in bugs:
-            key = bug.product_id or 0
-            grouped.setdefault(key, []).append(bug)
-
-        result = []
-        for product_id, items in grouped.items():
-            summary = _bug_stat_summary(items)
-            result.append(
-                {
-                    "product_id": product_id or None,
-                    "product_name": product_map.get(product_id, "未关联产品"),
-                    **summary,
-                }
-            )
-        result.sort(key=lambda item: item["total"], reverse=True)
-        return success(data=result)
+        return success(data=_by_product_rows(db, data))
     finally:
         db.close()
 
@@ -201,29 +231,71 @@ def by_version():
     data = request.get_json(force=True, silent=True) or {}
     db = SessionLocal()
     try:
-        bugs = _filtered_bug_query(db, data).all()
-        product_map = {product.id: product.name for product in db.query(IssueProduct).all()}
-        grouped = {}
-        for bug in bugs:
-            version = (bug.affect_version or "").strip() or BLANK_VERSION_LABEL
-            key = (bug.product_id or 0, version)
-            grouped.setdefault(key, []).append(bug)
-
-        result = []
-        for (product_id, version), items in grouped.items():
-            summary = _bug_stat_summary(items)
-            result.append(
-                {
-                    "product_id": product_id or None,
-                    "product_name": product_map.get(product_id, "未关联产品"),
-                    "version": version,
-                    **summary,
-                }
-            )
-        result.sort(key=lambda item: item["total"], reverse=True)
-        return success(data=result)
+        return success(data=_by_version_rows(db, data))
     finally:
         db.close()
+
+
+@issue_statistic_bp.route("/export", methods=["POST"])
+@require_permission("issue/stat_export")
+def stat_export():
+    data = request.get_json(force=True, silent=True) or {}
+    db = SessionLocal()
+    try:
+        overview_data = _overview_data(db, data)
+        product_rows = _by_product_rows(db, data)
+        version_rows = _by_version_rows(db, data)
+    finally:
+        db.close()
+
+    workbook = openpyxl.Workbook()
+    overview_sheet = workbook.active
+    overview_sheet.title = "统计总览"
+    overview_headers = ["指标", "数值"]
+    for index, header in enumerate(overview_headers, 1):
+        cell = overview_sheet.cell(row=1, column=index, value=header)
+        cell.font = Font(bold=True)
+    labels = [
+        ("问题总数", "bug_total"),
+        ("已解决", "bug_resolved"),
+        ("未解决", "bug_active"),
+        ("解决率", "resolve_rate"),
+        ("PoC项目总数", "poc_total"),
+        ("PoC已关闭", "poc_closed"),
+        ("PoC进行中", "poc_active"),
+    ]
+    for row_index, (label, key) in enumerate(labels, 2):
+        overview_sheet.cell(row=row_index, column=1, value=label)
+        overview_sheet.cell(row=row_index, column=2, value=overview_data.get(key, 0))
+
+    product_sheet = workbook.create_sheet("按产品")
+    product_headers = ["产品", "问题总数", "已解决", "未解决", "解决率"]
+    for index, header in enumerate(product_headers, 1):
+        cell = product_sheet.cell(row=1, column=index, value=header)
+        cell.font = Font(bold=True)
+    for row_index, row in enumerate(product_rows, 2):
+        values = [row["product_name"], row["total"], row["resolved"], row["active"], row["resolve_rate"]]
+        for column_index, value in enumerate(values, 1):
+            product_sheet.cell(row=row_index, column=column_index, value=value)
+
+    version_sheet = workbook.create_sheet("按版本")
+    version_headers = ["产品", "影响版本", "问题总数", "已解决", "未解决", "解决率"]
+    for index, header in enumerate(version_headers, 1):
+        cell = version_sheet.cell(row=1, column=index, value=header)
+        cell.font = Font(bold=True)
+    for row_index, row in enumerate(version_rows, 2):
+        values = [row["product_name"], row["version"], row["total"], row["resolved"], row["active"], row["resolve_rate"]]
+        for column_index, value in enumerate(values, 1):
+            version_sheet.cell(row=row_index, column=column_index, value=value)
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    filename = "统计分析报表.xlsx"
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @issue_statistic_bp.route("/by-resolver", methods=["POST"])
