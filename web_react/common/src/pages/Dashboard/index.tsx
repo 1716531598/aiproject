@@ -1,9 +1,9 @@
 import { EllipsisOutlined } from '@ant-design/icons';
 import { Pie } from '@ant-design/plots';
-import { GridContent } from '@ant-design/pro-components';
+import { GridContent, ProTable } from '@ant-design/pro-components';
 import { loadThemeColor } from '@ray/common/hooks/useThemeColor';
-import { useRequest } from '@umijs/max';
-import { Badge, Card, Col, Dropdown, Row, Table } from 'antd';
+import { history, useRequest } from '@umijs/max';
+import { Badge, Button, Card, Col, Dropdown, List, message, Row, Statistic, Table, Tag } from 'antd';
 import type { RadioChangeEvent } from 'antd/es/radio';
 import dayjs from 'dayjs';
 import type { FC } from 'react';
@@ -16,7 +16,7 @@ import { StatusPie } from './components/StatusPie';
 import TopSearch from './components/TopSearch';
 import * as Constants from './constant';
 import type { AnalysisData } from './data';
-import { fakeChartData } from './service';
+import { apiIssueMySummary, apiIssueScoreRanking, apiTodoStatus, fakeChartData } from './service';
 import styles from './style.less';
 type AnalysisProps = {
   dashboardAndanalysis: AnalysisData;
@@ -44,6 +44,12 @@ const Analysis: FC<AnalysisProps> = () => {
     { label: '本年', value: [dayjs().startOf('year'), dayjs().endOf('year')] },
   ];
   const { loading, data } = useRequest(fakeChartData);
+  const {
+    loading: issueLoading,
+    data: issueSummary = {},
+    refresh: refreshIssueSummary,
+  } = useRequest(apiIssueMySummary);
+  const { data: scoreRanking = [] } = useRequest(apiIssueScoreRanking);
   const handleRangeChange = (dates: [dayjs.Dayjs, dayjs.Dayjs] | null) => {
     if (dates?.[0] && dates?.[1]) {
       setRangeValue(dates);
@@ -117,9 +123,98 @@ const Analysis: FC<AnalysisProps> = () => {
     currentTabKey || (data?.offlineData?.[0] && data?.offlineData[0].name) || '';
 
   const colors = loadThemeColor();
+  const completeTodo = async (id: number) => {
+    const { code = 470, msg = '', msgType = 'info' } = await apiTodoStatus({ id, status: '已完成' });
+    message[msgType === 'success' || code === 200 ? 'success' : 'error'](msg);
+    if (code === 200) refreshIssueSummary();
+  };
+
   return (
     <GridContent style={{ overflowX: 'hidden' }}>
       <>
+        <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+          <Col xl={12} lg={24} md={24} sm={24} xs={24}>
+            <Card
+              title="我的待解决 Bug"
+              loading={issueLoading}
+              extra={
+                <span>
+                  总数 {issueSummary?.bug_stats?.total || 0} / 已解决 {issueSummary?.bug_stats?.resolved || 0} / 待解决 {issueSummary?.bug_stats?.pending || 0}
+                </span>
+              }
+            >
+              <ProTable
+                rowKey="id"
+                search={false}
+                pagination={false}
+                dataSource={issueSummary?.bugs || []}
+                size="small"
+                columns={[
+                  {
+                    title: '编号',
+                    dataIndex: 'bug_id',
+                    width: 120,
+                    render: (text: string, record: any) => (
+                      <a onClick={() => history.push(`/issue/bugs/${record.id}`)}>{text}</a>
+                    ),
+                  },
+                  { title: '标题', dataIndex: 'title', ellipsis: true },
+                  { title: '严重程度', dataIndex: 'severity', width: 100, render: (_: any, record: any) => <Tag>P{record.severity}</Tag> },
+                  { title: '创建时间', dataIndex: 'created_date', valueType: 'dateTime', width: 160 },
+                ]}
+                options={false}
+              />
+            </Card>
+          </Col>
+          <Col xl={12} lg={24} md={24} sm={24} xs={24}>
+            <Card title="我的待办任务" loading={issueLoading}>
+              <List
+                size="small"
+                dataSource={issueSummary?.todos || []}
+                renderItem={(item: any) => {
+                  const overdue = item.deadline && item.status !== '已完成' && new Date(item.deadline) < new Date();
+                  return (
+                    <List.Item
+                      actions={[
+                        item.status !== '已完成' ? (
+                          <Button type="link" size="small" onClick={() => completeTodo(item.id)}>
+                            完成
+                          </Button>
+                        ) : null,
+                      ]}
+                    >
+                      <List.Item.Meta
+                        title={<span style={{ color: overdue ? '#ff4d4f' : undefined }}>{item.content}</span>}
+                        description={`截止：${item.deadline || '-'} | 状态：${item.status}`}
+                      />
+                    </List.Item>
+                  );
+                }}
+              />
+            </Card>
+          </Col>
+          <Col xl={8} lg={12} md={12} sm={24} xs={24}>
+            <Card loading={issueLoading}>
+              <Statistic title="我的年度扣分" value={issueSummary?.score?.total || 0} precision={4} suffix="/ 0.3" />
+              <div style={{ marginTop: 8 }}>涉及 Bug 数：{issueSummary?.score?.bug_count || 0}</div>
+            </Card>
+          </Col>
+          <Col xl={16} lg={12} md={12} sm={24} xs={24}>
+            <Card title="扣分排名">
+              <List
+                size="small"
+                dataSource={scoreRanking as any[]}
+                renderItem={(item: any, index) => (
+                  <List.Item>
+                    <span>{index + 1}. {item.staff_name}</span>
+                    <Tag color={index < 3 ? 'red' : 'default'}>{item.total_score}</Tag>
+                  </List.Item>
+                )}
+              />
+            </Card>
+          </Col>
+        </Row>
+
         <Suspense fallback={<PageLoading />}>
           <IntroduceRow loading={loading} visitData={data?.visitData || []} />
         </Suspense>
