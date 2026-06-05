@@ -1,11 +1,18 @@
-import { ImportOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ExportOutlined, ImportOutlined, ReloadOutlined, UserSwitchOutlined } from '@ant-design/icons';
 import { history } from '@umijs/max';
-import { ProTable } from '@ant-design/pro-components';
+import { ModalForm, ProTable } from '@ant-design/pro-components';
 import { PAGINATION_PROPS } from '@ray/common/constants/index';
 import { transformSort } from '@ray/common/utils/utilFn';
-import { Button, Tag, theme } from 'antd';
+import { Button, Form, message, Select, Tag, theme } from 'antd';
 import { useEffect, useRef, useState } from 'react';
-import { apiBugQuery, apiIssueTypeOptions, apiProductOptions } from './service';
+import {
+  apiBugBatchAssign,
+  apiBugExport,
+  apiBugQuery,
+  apiIssueTypeOptions,
+  apiProductOptions,
+  apiStaffActiveOptions,
+} from './service';
 
 const SEVERITY_OPTIONS = [
   { label: 'P1', value: 1 },
@@ -40,21 +47,28 @@ const BugList = () => {
   const actionRef = useRef<any>();
   const [productOptions, setProductOptions] = useState<any[]>([]);
   const [issueTypeOptions, setIssueTypeOptions] = useState<any[]>([]);
+  const [staffOptions, setStaffOptions] = useState<any[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<any[]>([]);
+  const [batchVisible, setBatchVisible] = useState(false);
+  const [queryParams, setQueryParams] = useState<any>({});
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const loadOptions = async () => {
-      const [{ data: productData = {} }, { data: typeData = {} }] = await Promise.all([
+      const [{ data: productData = {} }, { data: typeData = {} }, { data: staffData = [] }] = await Promise.all([
         apiProductOptions(),
         apiIssueTypeOptions(),
+        apiStaffActiveOptions(),
       ]);
       setProductOptions((productData.aaData || []).map((item: any) => ({ label: item.name, value: item.id })));
       setIssueTypeOptions((typeData.aaData || []).map((item: any) => ({ label: item.name, value: item.id })));
+      setStaffOptions(staffData.map((item: any) => ({ label: item.name, value: item.id })));
     };
     loadOptions();
   }, []);
 
   const request = async (params: any = {}, sort = {}) => {
-    const { data = {} } = await apiBugQuery({
+    const payload = {
       page: params.current,
       pageSize: params.pageSize,
       keyword: params.keyword,
@@ -63,8 +77,30 @@ const BugList = () => {
       status: params.status,
       issue_type_id: params.issue_type_id,
       ...transformSort(sort),
-    });
+    };
+    setQueryParams(payload);
+    const { data = {} } = await apiBugQuery(payload);
     return { data: data.aaData || [], total: data.total || 0, success: true };
+  };
+
+  const downloadExport = async () => {
+    setExporting(true);
+    try {
+      const { blob, filename } = await apiBugExport(queryParams);
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      document.body.appendChild(link);
+      link.style.display = 'none';
+      link.href = blobUrl;
+      link.download = filename;
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error: any) {
+      message.error(error?.message || '导出失败');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const columns = [
@@ -152,26 +188,63 @@ const BugList = () => {
   ];
 
   return (
-    <ProTable
-      rowKey="id"
-      headerTitle="网上问题"
-      columns={columns}
-      pagination={{ ...PAGINATION_PROPS }}
-      request={request}
-      actionRef={actionRef}
-      onRow={(record) => ({
-        onDoubleClick: () => history.push(`/issue/bugs/${record.id}`),
-      })}
-      toolBarRender={() => [
-        <Button icon={<ImportOutlined />} type="primary" onClick={() => history.push('/issue/bugs/import')}>
-          导入
-        </Button>,
-        <Button icon={<ReloadOutlined />} onClick={() => actionRef.current?.reload()}>
-          刷新
-        </Button>,
-      ]}
-      options={{ reload: false, setting: false, density: false }}
-    />
+    <>
+      <ProTable
+        rowKey="id"
+        headerTitle="网上问题"
+        columns={columns}
+        pagination={{ ...PAGINATION_PROPS }}
+        request={request}
+        actionRef={actionRef}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys as any[]),
+        }}
+        onRow={(record) => ({
+          onDoubleClick: () => history.push(`/issue/bugs/${record.id}`),
+        })}
+        toolBarRender={() => [
+          <Button icon={<ImportOutlined />} type="primary" onClick={() => history.push('/issue/bugs/import')}>
+            导入
+          </Button>,
+          <Button icon={<UserSwitchOutlined />} disabled={!selectedRowKeys.length} onClick={() => setBatchVisible(true)}>
+            批量指派
+          </Button>,
+          <Button icon={<ExportOutlined />} loading={exporting} onClick={downloadExport}>
+            导出
+          </Button>,
+          <Button icon={<ReloadOutlined />} onClick={() => actionRef.current?.reload()}>
+            刷新
+          </Button>,
+        ]}
+        options={{ reload: false, setting: false, density: false }}
+      />
+      <ModalForm
+        title="批量指派"
+        width={520}
+        visible={batchVisible}
+        layout="horizontal"
+        labelCol={{ span: 6 }}
+        wrapperCol={{ span: 14 }}
+        onFinish={async (values: any) => {
+          const { code = 470, msg = '', msgType = 'info' } = await apiBugBatchAssign({
+            ids: selectedRowKeys,
+            staff_id: values.staff_id,
+          });
+          message[msgType === 'success' || code === 200 ? 'success' : 'error'](msg);
+          if (code === 200) {
+            setBatchVisible(false);
+            setSelectedRowKeys([]);
+            actionRef.current?.reload();
+          }
+        }}
+        modalProps={{ destroyOnHidden: true, onCancel: () => setBatchVisible(false) }}
+      >
+        <Form.Item label="解决人员" name="staff_id" rules={[{ required: true, message: '请选择解决人员' }]}>
+          <Select options={staffOptions} showSearch optionFilterProp="label" />
+        </Form.Item>
+      </ModalForm>
+    </>
   );
 };
 

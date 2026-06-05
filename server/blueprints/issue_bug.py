@@ -1,6 +1,7 @@
 from datetime import datetime
+from urllib.parse import quote
 
-from flask import Blueprint, request
+from flask import Blueprint, Response, request
 
 from blueprints.auth import get_current_user
 from models import (
@@ -14,6 +15,7 @@ from models import (
     IssueVersion,
 )
 from utils.db import SessionLocal
+from utils.issue_export import export_bugs_to_excel
 from utils.issue_import import import_zentao_csv
 from utils.permission import require_permission
 from utils.response import error, paginate, success
@@ -67,6 +69,38 @@ def _bug_to_dict_with_names(db, bug):
     return item
 
 
+def _apply_bug_filters(query, data):
+    if data.get("bug_id"):
+        query = query.filter(IssueBug.bug_id == data["bug_id"].strip())
+    if data.get("keyword"):
+        query = query.filter(IssueBug.title.ilike(f"%{data['keyword'].strip()}%"))
+    if data.get("product_id"):
+        query = query.filter(IssueBug.product_id == data["product_id"])
+    if data.get("severity"):
+        query = query.filter(IssueBug.severity == data["severity"])
+    if data.get("status"):
+        query = query.filter(IssueBug.status == data["status"])
+    if data.get("issue_type_id"):
+        query = query.filter(IssueBug.issue_type_id == data["issue_type_id"])
+    if data.get("module_id"):
+        query = query.filter(IssueBug.module_id == data["module_id"])
+    if data.get("staff_id"):
+        query = query.filter(IssueBug.staff_id == data["staff_id"])
+    return query
+
+
+def _apply_bug_sort(query, sort_field, sort_order):
+    sort_columns = {
+        "bug_id": IssueBug.bug_id,
+        "severity": IssueBug.severity,
+        "status": IssueBug.status,
+        "created_date": IssueBug.created_date,
+        "updated_at": IssueBug.updated_at,
+    }
+    sort_column = sort_columns.get(sort_field, IssueBug.created_date)
+    return query.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
+
+
 @issue_bug_bp.route("/query", methods=["POST"])
 @require_permission("issue/bug_view")
 def query():
@@ -78,34 +112,9 @@ def query():
 
     db = SessionLocal()
     try:
-        q = db.query(IssueBug)
-        if data.get("bug_id"):
-            q = q.filter(IssueBug.bug_id == data["bug_id"].strip())
-        if data.get("keyword"):
-            q = q.filter(IssueBug.title.ilike(f"%{data['keyword'].strip()}%"))
-        if data.get("product_id"):
-            q = q.filter(IssueBug.product_id == data["product_id"])
-        if data.get("severity"):
-            q = q.filter(IssueBug.severity == data["severity"])
-        if data.get("status"):
-            q = q.filter(IssueBug.status == data["status"])
-        if data.get("issue_type_id"):
-            q = q.filter(IssueBug.issue_type_id == data["issue_type_id"])
-        if data.get("module_id"):
-            q = q.filter(IssueBug.module_id == data["module_id"])
-        if data.get("staff_id"):
-            q = q.filter(IssueBug.staff_id == data["staff_id"])
-
+        q = _apply_bug_filters(db.query(IssueBug), data)
         total = q.count()
-        sort_columns = {
-            "bug_id": IssueBug.bug_id,
-            "severity": IssueBug.severity,
-            "status": IssueBug.status,
-            "created_date": IssueBug.created_date,
-            "updated_at": IssueBug.updated_at,
-        }
-        sort_column = sort_columns.get(sort_field, IssueBug.created_date)
-        q = q.order_by(sort_column.asc() if sort_order == "asc" else sort_column.desc())
+        q = _apply_bug_sort(q, sort_field, sort_order)
         bugs = q.offset((page - 1) * page_size).limit(page_size).all()
 
         result = [_bug_to_dict_with_names(db, bug) for bug in bugs]
@@ -113,6 +122,59 @@ def query():
         return success(data=paginate(result, page, page_size, total))
     finally:
         db.close()
+
+
+@issue_bug_bp.route("/batch-assign", methods=["POST"])
+@require_permission("issue/bug_import")
+def batch_assign():
+    data = request.get_json(force=True, silent=True) or {}
+    bug_ids = data.get("ids", [])
+    staff_id = data.get("staff_id")
+    if not bug_ids or not staff_id:
+        return error("请选择 Bug 和解决人员")
+
+    db = SessionLocal()
+    try:
+        staff = db.query(IssueStaff).filter(IssueStaff.id == staff_id, IssueStaff.status == "启用").first()
+        if not staff:
+            return error("解决人员不存在或已禁用")
+        now = datetime.now()
+        updated = 0
+        bugs = db.query(IssueBug).filter(IssueBug.id.in_(bug_ids)).all()
+        for bug in bugs:
+            bug.staff_id = staff_id
+            bug.assign_time = now
+            updated += 1
+        db.commit()
+        return success(msg=f"成功指派 {updated} 个问题")
+    finally:
+        db.close()
+
+
+@issue_bug_bp.route("/export", methods=["POST"])
+@require_permission("issue/bug_export")
+def export_bugs():
+    data = request.get_json(force=True, silent=True) or {}
+    sort_field = data.get("sortField") or "created_date"
+    sort_order = data.get("sortOrder") or "desc"
+    columns = data.get("columns")
+
+    db = SessionLocal()
+    try:
+        q = _apply_bug_filters(db.query(IssueBug), data)
+        q = _apply_bug_sort(q, sort_field, sort_order)
+        bugs = q.limit(10000).all()
+        excel_bytes = export_bugs_to_excel([_bug_to_dict_with_names(db, bug) for bug in bugs], columns)
+    finally:
+        db.close()
+
+    filename = "网上问题报表.xlsx"
+    quoted_filename = quote(filename)
+    return Response(
+        excel_bytes,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_filename}"},
+    )
 
 
 @issue_bug_bp.route("/detail", methods=["POST"])
